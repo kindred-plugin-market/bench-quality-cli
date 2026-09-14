@@ -82,19 +82,6 @@ export const features = [
             fail_text: "A deleted or renamed path left its scope unverified",
           },
           {
-            name: "partial-staging",
-            priority: 2,
-            run: "node scripts/quality/guard-partial-staging.mjs",
-            fail_text: "Refusing to rewrite a partially staged file",
-          },
-          {
-            name: "whitespace",
-            priority: 3,
-            run: "node scripts/quality/guard-partial-staging.mjs && node scripts/quality/fix-staged-whitespace.mjs",
-            stage_fixed: true,
-            fail_text: "Trailing whitespace could not be fixed automatically",
-          },
-          {
             name: "i18n-guards",
             glob: ["src/**", "extensions/**"],
             priority: 10,

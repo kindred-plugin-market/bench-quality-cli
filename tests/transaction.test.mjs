@@ -77,10 +77,10 @@ test("re-running init is idempotent", async (t) => {
   const before = await listFiles(repo.dir);
   const second = runCli(["init", "--features", "commitlint"], { cwd: repo.dir });
   assert.equal(second.status, 0, second.stderr);
-  // 9 files: commitlint.config.js, lefthook.yml, package.json,
-  // pnpm-workspace.yaml, the two hook bodies and the three hook support files
-  // (git-changes, partial-staging guard, installer).
-  assert.match(second.stdout, /0 create, 0 update, 9 unchanged/);
+  // 10 files: commitlint.config.js, lefthook.yml, package.json,
+  // pnpm-workspace.yaml, the two hook bodies and the four hook support files
+  // (git-changes, partial-staging guard, whitespace fixer, installer).
+  assert.match(second.stdout, /0 create, 0 update, 10 unchanged/);
   assert.deepEqual(await listFiles(repo.dir), before);
 });
 

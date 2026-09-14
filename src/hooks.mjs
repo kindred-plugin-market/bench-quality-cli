@@ -85,10 +85,40 @@ export function hookContent({ hook, passArg = false }) {
 export const HOOK_SUPPORT_FILES = [
   { from: "guards/git-changes.mjs", to: "scripts/quality/git-changes.mjs" },
   { from: "guards/guard-partial-staging.mjs", to: PARTIAL_STAGING_GUARD },
+  { from: "guards/fix-staged-whitespace.mjs", to: "scripts/quality/fix-staged-whitespace.mjs" },
   // Fresh clones need an install entry: the generator runs once, `.git/config`
   // is not versioned, and without it a reviewer would commit with no gate.
   { from: "scripts/install-hooks.mjs", to: "scripts/quality/install-hooks.mjs" },
 ];
+
+/**
+ * Baseline pre-commit wiring every repository gets, independent of feature
+ * choice: refuse partial staging, then fix whitespace (chained so the guard
+ * cannot be reordered), in that priority order. Feature-specific gates are
+ * declared by the features themselves.
+ */
+export const BASE_WIRING = {
+  id: "quality-core",
+  lefthook: {
+    "pre-commit": {
+      commands: [
+        {
+          name: "partial-staging",
+          priority: 2,
+          run: `node ${PARTIAL_STAGING_GUARD}`,
+          fail_text: "Refusing to rewrite a partially staged file",
+        },
+        {
+          name: "whitespace",
+          priority: 3,
+          run: `node ${PARTIAL_STAGING_GUARD} && node scripts/quality/fix-staged-whitespace.mjs`,
+          stage_fixed: true,
+          fail_text: "Trailing whitespace could not be fixed automatically",
+        },
+      ],
+    },
+  },
+};
 
 export function planHooks() {
   return HOOK_FILES.map((file) => ({

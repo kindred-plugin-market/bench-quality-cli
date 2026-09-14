@@ -15,7 +15,13 @@
     "templates"
   ],
   "scripts": {
-    "test": "node --test \"tests/**/*.test.mjs\""
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "hooks:install": "node scripts/quality/install-hooks.mjs",
+    "check:precommit": "node node_modules/lefthook/bin/index.js run pre-commit",
+    "check:md-links": "node scripts/quality/check-markdown-links.mjs --all",
+    "check:syntax": "node scripts/check-syntax.mjs",
+    "verify": "pnpm run check:syntax && pnpm test",
+    "prepare": "node scripts/quality/install-hooks.mjs"
   },
   "engines": {
     "node": ">=24.15.0"
@@ -25,5 +31,11 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kindred-plugin-market/bench-quality-cli.git"
+  },
+  "devDependencies": {
+    "lefthook": "^2.1.14",
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
+    "markdown-link-check": "^3"
   }
 }

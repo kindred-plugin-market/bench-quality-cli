@@ -7,7 +7,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { CODES, CliError } from "./errors.mjs";
 import { readJsonIfExists, readTextIfExists, sha256, statOrNull } from "./fsx.mjs";
-import { HOOK_SUPPORT_FILES, planHooks } from "./hooks.mjs";
+import { BASE_WIRING, HOOK_SUPPORT_FILES, planHooks } from "./hooks.mjs";
 import { planLefthook } from "./lefthook.mjs";
 import { readManifest } from "./manifest.mjs";
 import { devDepsFor, planPackageJson, readManagedState, scriptsFor } from "./package-json.mjs";
@@ -232,7 +232,7 @@ export async function buildPlan({
   const lefthookRaw = await readTextIfExists(join(target, "lefthook.yml"));
   const lefthookPlan = planLefthook({
     raw: lefthookRaw,
-    features: resolved,
+    features: keepWiring ? [BASE_WIRING, ...resolved] : [],
     previousEntries: existing?.lefthook?.managedEntries ?? [],
   });
   if (lefthookPlan.removed.length > 0) {

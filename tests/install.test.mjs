@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { loadAll as loadAllYaml } from "js-yaml";
 
 const ROOT = join(import.meta.dirname, "..");
 const readJson = async (name) => JSON.parse(await readFile(join(ROOT, name), "utf8"));
@@ -26,16 +27,27 @@ test("pnpm-workspace.yaml keeps lefthook's postinstall denied", async () => {
 
 test("the lockfile matches the manifest specifiers", async () => {
   const pkg = await readJson("package.json");
-  const lock = await readFile(join(ROOT, "pnpm-lock.yaml"), "utf8");
-  assert.match(lock, /^lockfileVersion: '9\.0'$/m, "pnpm 12 keeps lockfileVersion 9 — no lock migration needed");
+  const rawLock = await readFile(join(ROOT, "pnpm-lock.yaml"), "utf8");
+  assert.match(rawLock, /^lockfileVersion: '9\.0'$/m, "pnpm 12 keeps lockfileVersion 9 — no lock migration needed");
 
-  const importer = lock.split("importers:")[1]?.split("packages:")[0] ?? "";
-  for (const [name, range] of Object.entries(pkg.dependencies ?? {})) {
-    assert.match(importer, new RegExp(`\\n      ${name}:\\n        specifier: ${range.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n`), `${name}@${range} must be in the lock importer`);
+  // pnpm 12 writes the lockfile as two YAML documents (package-manager metadata
+  // first, then settings/importers/packages); the importer with the real
+  // dependencies is the one that declares them.
+  const importers = loadAllYaml(rawLock)
+    .filter((doc) => doc?.importers?.["."])
+    .map((doc) => doc.importers["."]);
+  const importer = importers.find((entry) => entry.dependencies || entry.devDependencies);
+  assert.ok(importer, "the lockfile must contain an importer with dependencies");
+
+  for (const section of ["dependencies", "devDependencies"]) {
+    for (const [name, range] of Object.entries(pkg[section] ?? {})) {
+      const entry = importer[section]?.[name];
+      assert.ok(entry, `${name}@${range} must be in the lock importer`);
+      assert.equal(entry.specifier, range, `${name} specifier must match package.json`);
+    }
   }
-  for (const [name, range] of Object.entries(pkg.devDependencies ?? {})) {
-    assert.match(importer, new RegExp(`\\n      ${name}:\\n        specifier: ${range.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n`), `${name}@${range} must be in the lock importer`);
-  }
+  const packageManagerEntry = importers.map((entry) => entry.packageManagerDependencies?.pnpm?.specifier).find(Boolean);
+  assert.equal(packageManagerEntry, pkg.packageManager.replace("pnpm@", ""));
 });
 
 test("frozen install is reproducible with the pinned pnpm", async (t) => {

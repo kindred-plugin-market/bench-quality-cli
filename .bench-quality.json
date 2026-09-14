@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "generator": {
+    "name": "bench-quality-cli",
+    "version": "0.1.0"
+  },
+  "profile": "node-tool",
+  "features": [
+    "commitlint",
+    "markdown"
+  ],
+  "profiles": [
+    "node-tool"
+  ],
+  "files": {
+    "scripts/quality/git-changes.mjs": "a8e5c0883c489a881f808389e07b10970e14d9894b69f618e3f541cf6e33a2d5",
+    "scripts/quality/guard-partial-staging.mjs": "a6e17dada278a56ccfe4c8def9aa22b9117b9cf96bae9b5068f016db230986ce",
+    "scripts/quality/fix-staged-whitespace.mjs": "927d3d5108df7970c79356845c76cc68ff34235d7c5df3ddabcdcd9cccc4347f",
+    "scripts/quality/install-hooks.mjs": "a8d53e86b814d6b57f6adcf93848ca0949760aa20f12625d5f05cea9a118ea6c",
+    "commitlint.config.js": "13697fba68e67123367a54e35528f6098765d327b39d3dca3454c8f79de07d79",
+    ".markdown-link-check.json": "ad03b7699377c22c3fee72d12cc208f3999b7dc73a03e63b656b793f832f4126",
+    "scripts/quality/check-markdown-links.mjs": "cc2d63183cf7bf5dd8951cfdcf619d0360f9b686b4e17ac07dde6c74b35e82e3",
+    ".husky/pre-commit": "cdeb724662d86c5a9f70759a226983df3f46593bd6ba1b20474b7a398c7918e6",
+    ".husky/commit-msg": "a72bbc3991e69c18c19584fbfd7efd405cc6b49742a4da24875ecab19ef4d863",
+    "lefthook.yml": "909031a9faef9788993db05a92ca16512d7706aaeccc22cd4c5f910b44f6f62d",
+    "package.json": "a25947afd27ad1fda2d471a74adfb01329e19fb80fe782eda696d298cdcaaf6a",
+    "pnpm-workspace.yaml": "295b5281c520176be8b953fbfeeb071c74f33137bb3857f64030d7fe56f60e1f"
+  },
+  "packageJson": {
+    "managed": {
+      "devDependencies": {
+        "lefthook": "^2.1.14",
+        "@commitlint/cli": "^21.2.2",
+        "@commitlint/config-conventional": "^21.2.2",
+        "markdown-link-check": "^3"
+      },
+      "scripts": {
+        "hooks:install": "node scripts/quality/install-hooks.mjs",
+        "check:precommit": "node node_modules/lefthook/bin/index.js run pre-commit",
+        "check:md-links": "node scripts/quality/check-markdown-links.mjs --all",
+        "test": "node --test \"tests/**/*.test.mjs\"",
+        "prepare": "node scripts/quality/install-hooks.mjs"
+      }
+    }
+  },
+  "workspace": {
+    "managedKeys": {
+      "allowBuilds": {
+        "lefthook": false
+      }
+    }
+  },
+  "lefthook": {
+    "managedEntries": [
+      "pre-commit.commands.partial-staging",
+      "pre-commit.commands.whitespace",
+      "pre-commit.commands.markdown-links",
+      "commit-msg.commands.commitlint"
+    ]
+  },
+  "git": {
+    "hooksPath": ".husky",
+    "previousHooksPath": null
+  },
+  "batch": {
+    "id": "20260914T150606-h313",
+    "startedAt": "2026-09-14T15:06:06.202Z",
+    "finishedAt": "2026-09-14T15:06:06.213Z"
+  }
+}

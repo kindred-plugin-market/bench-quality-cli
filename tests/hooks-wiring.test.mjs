@@ -77,16 +77,26 @@ test("every vendored hook reference resolves to a file the plan installs", async
   assert.ok(installed.includes("git-changes.mjs"));
 });
 
-test("the partial-staging guard is installed for every feature set", async (t) => {
-  for (const featureList of ["commitlint", "markdown"]) {
+test("the baseline wiring is installed for every feature set", async (t) => {
+  for (const featureList of ["commitlint", "markdown", "commitlint,markdown"]) {
     const repo = await makeRepo({ files: { "package.json": "{}\n" } });
     t.after(repo.cleanup);
     const result = runCli(["init", "--features", featureList], { cwd: repo.dir });
     assert.equal(result.status, 0, result.stderr);
-    const guard = await readFile(repo.file("scripts/quality/guard-partial-staging.mjs"), "utf8").catch(() => null);
-    assert.ok(guard, `${featureList} must install the hook support files`);
+
+    for (const file of ["git-changes.mjs", "guard-partial-staging.mjs", "fix-staged-whitespace.mjs", "install-hooks.mjs"]) {
+      const content = await readFile(repo.file(`scripts/quality/${file}`), "utf8").catch(() => null);
+      assert.ok(content, `${featureList} must install scripts/quality/${file}`);
+    }
     const body = await readFile(repo.file(".husky/pre-commit"), "utf8");
     assert.match(body, /guard-partial-staging\.mjs/);
+
+    const doc = loadYaml(await readFile(repo.file("lefthook.yml"), "utf8"));
+    const commands = doc["pre-commit"].commands;
+    assert.ok(commands["partial-staging"], `${featureList} needs the partial-staging entry`);
+    assert.match(commands.whitespace.run, /guard-partial-staging\.mjs && node scripts\/quality\/fix-staged-whitespace\.mjs/);
+    assert.equal(commands.whitespace.stage_fixed, true);
+    assert.ok(commands["partial-staging"].priority < commands.whitespace.priority, "guard before fixer");
   }
 });
 

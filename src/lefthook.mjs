@@ -71,8 +71,11 @@ export function buildManaged(features) {
 function toYamlCommand(command) {
   const out = {};
   if (command.root) out.root = command.root;
-  if (command.stage_fixed) out.stage_fixed = true;
+  if (command.glob) out.glob = command.glob;
+  if (command.exclude) out.exclude = command.exclude;
+  if (command.priority !== undefined) out.priority = command.priority;
   out.run = command.run;
+  if (command.stage_fixed) out.stage_fixed = true;
   if (command.fail_text) out.fail_text = command.fail_text;
   return out;
 }

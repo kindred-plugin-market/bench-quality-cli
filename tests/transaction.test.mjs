@@ -67,7 +67,9 @@ test("re-running init is idempotent", async (t) => {
   const before = await listFiles(repo.dir);
   const second = runCli(["init", "--features", "commitlint"], { cwd: repo.dir });
   assert.equal(second.status, 0, second.stderr);
-  assert.match(second.stdout, /0 create, 0 update, 5 unchanged/);
+  // 7 files: commitlint.config.js, lefthook.yml, package.json, the two hook
+  // bodies and the two hook support files the pre-commit body depends on.
+  assert.match(second.stdout, /0 create, 0 update, 7 unchanged/);
   assert.deepEqual(await listFiles(repo.dir), before);
 });
 

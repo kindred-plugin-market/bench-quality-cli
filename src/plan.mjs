@@ -6,7 +6,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { CODES, CliError } from "./errors.mjs";
 import { readJsonIfExists, readTextIfExists, sha256, statOrNull } from "./fsx.mjs";
-import { planHooks } from "./hooks.mjs";
+import { HOOK_SUPPORT_FILES, planHooks } from "./hooks.mjs";
 import { planLefthook } from "./lefthook.mjs";
 import { readManifest } from "./manifest.mjs";
 import { planPackageJson } from "./package-json.mjs";
@@ -104,6 +104,13 @@ function uniqueIds(ids) {
   return [...new Set(ids)];
 }
 
+/** First writer wins for a destination path (base files before feature files). */
+function dedupeByTarget(files) {
+  const seen = new Map();
+  for (const file of files) if (!seen.has(file.to)) seen.set(file.to, file);
+  return [...seen.values()];
+}
+
 /**
  * Build the plan for init / update / remove.
  *
@@ -160,8 +167,16 @@ export async function buildPlan({
   const conflicts = [];
   const writes = [];
 
-  // 1) whole-file artifacts: vendored templates + hook bodies
-  for (const file of filesForFeatures(resolved)) {
+  const keepWiring = resolved.length > 0;
+
+  // 1) whole-file artifacts: vendored templates + hook bodies. The hook bodies
+  //    depend on the partial-staging guard, so those two files are installed
+  //    whenever hooks are wired (a feature may vendor them as well — identical
+  //    content, deduplicated by destination).
+  for (const file of dedupeByTarget([
+    ...(keepWiring ? HOOK_SUPPORT_FILES : []),
+    ...filesForFeatures(resolved),
+  ])) {
     const content = await readTemplate(file.from);
     writes.push(
       await planWholeFile({
@@ -177,7 +192,6 @@ export async function buildPlan({
       }),
     );
   }
-  const keepWiring = resolved.length > 0;
   for (const hook of keepWiring ? planHooks() : []) {
     writes.push(
       await planWholeFile({

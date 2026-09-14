@@ -16,14 +16,14 @@
     "scripts/quality/git-changes.mjs": "a8e5c0883c489a881f808389e07b10970e14d9894b69f618e3f541cf6e33a2d5",
     "scripts/quality/guard-partial-staging.mjs": "a6e17dada278a56ccfe4c8def9aa22b9117b9cf96bae9b5068f016db230986ce",
     "scripts/quality/fix-staged-whitespace.mjs": "927d3d5108df7970c79356845c76cc68ff34235d7c5df3ddabcdcd9cccc4347f",
-    "scripts/quality/install-hooks.mjs": "a8d53e86b814d6b57f6adcf93848ca0949760aa20f12625d5f05cea9a118ea6c",
+    "scripts/quality/install-hooks.mjs": "16ac817c2b26de798d33878a7f294f79ee63f54d3a2637f5de60ac37c3583a2d",
     "commitlint.config.js": "13697fba68e67123367a54e35528f6098765d327b39d3dca3454c8f79de07d79",
     ".markdown-link-check.json": "ad03b7699377c22c3fee72d12cc208f3999b7dc73a03e63b656b793f832f4126",
     "scripts/quality/check-markdown-links.mjs": "cc2d63183cf7bf5dd8951cfdcf619d0360f9b686b4e17ac07dde6c74b35e82e3",
     ".husky/pre-commit": "cdeb724662d86c5a9f70759a226983df3f46593bd6ba1b20474b7a398c7918e6",
     ".husky/commit-msg": "a72bbc3991e69c18c19584fbfd7efd405cc6b49742a4da24875ecab19ef4d863",
-    "lefthook.yml": "909031a9faef9788993db05a92ca16512d7706aaeccc22cd4c5f910b44f6f62d",
-    "package.json": "a25947afd27ad1fda2d471a74adfb01329e19fb80fe782eda696d298cdcaaf6a",
+    "lefthook.yml": "b8637f30616155f83a2658ecc2d070841923cb855c1a1617f5b1c911e5cdae6f",
+    "package.json": "f59743e4e81deca55362bf7b4c24f5f2dc14bcfdbd4e7330a8d1d13dd739e0ef",
     "pnpm-workspace.yaml": "295b5281c520176be8b953fbfeeb071c74f33137bb3857f64030d7fe56f60e1f"
   },
   "packageJson": {
@@ -63,8 +63,8 @@
     "previousHooksPath": null
   },
   "batch": {
-    "id": "20260914T150606-h313",
-    "startedAt": "2026-09-14T15:06:06.202Z",
-    "finishedAt": "2026-09-14T15:06:06.213Z"
+    "id": "20260914T151410-ia6b",
+    "startedAt": "2026-09-14T15:14:10.131Z",
+    "finishedAt": "2026-09-14T15:14:10.140Z"
   }
 }

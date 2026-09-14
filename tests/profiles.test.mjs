@@ -3,10 +3,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 import { makeRepo, runCli } from "./helpers/cli-fixture.mjs";
 import { DEFAULT_PROFILE, findProfile, profiles } from "../src/profiles/index.mjs";
 import { features } from "../src/features/index.mjs";
+import { TEMPLATES_DIR } from "../src/templates.mjs";
 
 const readJson = async (path) => JSON.parse(await readFile(path, "utf8"));
 
@@ -181,6 +183,26 @@ test("the installer wires hooks, is idempotent and reports a fresh clone", async
 
   const verified = execFileSync(process.execPath, [installer, "--check"], { cwd: repo.dir, encoding: "utf8" });
   assert.match(verified, /already wired/);
+});
+
+test("the installer is a no-op inside an installed package", async (t) => {
+  const repo = await makeRepo({ files: { "package.json": "{}\n" } });
+  t.after(repo.cleanup);
+  // A published package ships this file and a `prepare` script, but not the
+  // consumer's generated hooks: running there must succeed quietly, otherwise a
+  // git/url install of the generator would fail.
+  const installer = repo.file("node_modules/bench-quality-cli/scripts/quality/install-hooks.mjs");
+  await mkdir(dirname(installer), { recursive: true });
+  await writeFile(installer, await readFile(join(TEMPLATES_DIR, "scripts", "install-hooks.mjs"), "utf8"));
+
+  const result = spawnSync(process.execPath, [installer], { cwd: repo.dir, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /inside an installed package/);
+  assert.equal(
+    spawnSync("git", ["config", "--get", "core.hooksPath"], { cwd: repo.dir, encoding: "utf8" }).status !== 0,
+    true,
+    "a skipped install must not touch the git config",
+  );
 });
 
 test("the installer refuses to claim success without generated hooks", async (t) => {

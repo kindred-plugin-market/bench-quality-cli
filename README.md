@@ -1,73 +1,152 @@
 # bench-quality-cli
 
-Vendoring-based quality-gate generator for Bench repos.
+Vendoring-based quality-gate generator for Bench repositories.
 
-`npx bench-quality-cli init` writes opt-in commit hooks / guards **into the
-consumer repo** (its own `scripts/`, `.husky/`, `lefthook.yml`, and
-`devDependencies`). Once generated, those artifacts are committed to the
-consumer's git — so **this generator repo can be deleted without breaking any
-already-initialized project** (delete-safe by design).
+`bench-quality init` writes the gates **into the consumer repository** (its own
+`scripts/quality/`, `.husky/`, `lefthook.yml`, `package.json` entries and a
+`.bench-quality.json` state file) and commits them there. The generator itself is
+only needed at that moment: **deleting this repository does not break an
+already-initialized project**.
 
-## Why a generator, not a runtime library
+## Requirements
 
-A runtime dependency would break consumers the moment this repo vanishes. By
-vendoring the actual scripts/config into each consumer, the only thing fetched
-on demand is the installer itself — and that is only needed at `init` time.
+| Tool | Version | Where it is declared |
+| ---- | ------- | -------------------- |
+| Node | `>=24.15.0` (`26.8.2` for local development and the main CI job) | `package.json` `engines.node`, `.node-version` |
+| pnpm | `12.4.1` | `package.json` `packageManager`, `pnpm-workspace.yaml` |
 
-The trade-off: vendored scripts don't auto-update. Mitigate with
-`npx bench-quality-cli update` (re-vendors selected features) or by bumping the
-version marker in the generated files.
+The bin entry refuses to run on an older runtime with `NODE_VERSION_UNSUPPORTED`
+instead of failing later with a syntax error.
 
 ## Usage
 
 ```bash
-# Interactive: pick features from a prompt
-npx bench-quality-cli init
+# Install into the current repository root, using a profile
+node bin/index.mjs init --profile node-tool
 
-# Non-interactive: choose exactly what you want
-npx bench-quality-cli init --features commitlint,markdown,bench-guards --yes
+# Pick features explicitly
+node bin/index.mjs init --features commitlint,markdown
 
-# Re-vendor (e.g. after improving a guard upstream)
-npx bench-quality-cli update --features bench-guards --yes
+# Preview first: prints the exact plan and writes nothing
+node bin/index.mjs init --profile tauri-host --dry-run
 
-# List available features
-npx bench-quality-cli list
+# Re-vendor after the generator changed (keeps the enabled feature set)
+node bin/index.mjs update
+
+# Adopt files that were edited locally (originals are backed up first)
+node bin/index.mjs update --accept-drift
+
+# Drop a feature and its artifacts
+node bin/index.mjs remove --features markdown
+
+# Inspect / repair
+node bin/index.mjs doctor --json
+node bin/index.mjs doctor --recover        # restore an interrupted batch
+node bin/index.mjs list
 ```
 
-Then commit the generated files:
+`update` without `--features` is additive: it keeps exactly what is enabled
+(`remove` is the only way to drop something). `init` and `update` require the
+target to be the **repository root**; generated hooks wired from a subdirectory
+would never run, so that case fails closed.
+
+Review and stage the result explicitly — do not blanket-add:
 
 ```bash
-git add -A && git commit -m "chore: add Bench quality gates"
+git status
+git diff
+git add .husky scripts/quality lefthook.yml package.json pnpm-workspace.yaml .bench-quality.json commitlint.config.js
+git commit -m "chore: add Bench quality gates"
 ```
 
-## How it works
+## Profiles
 
-1. **Vendors** feature scripts into `scripts/quality/` (and config files like
-   `commitlint.config.js`, `.markdown-link-check.json`).
-2. **Injects** `devDependencies` (always `lefthook`, plus per-feature deps).
-3. **Merges** `lefthook.yml` — only a managed block
-   (`# >>> bench-quality-cli:managed >>>`) is owned; outside edits survive.
-4. **Writes** `.husky/pre-commit` and `.husky/commit-msg` (iron-rule form:
-   `node node_modules/lefthook/bin/index.js run <hook>`).
-5. **Wires** `git config core.hooksPath .husky`.
+A profile describes what a *kind of repository* needs (features, required paths,
+project entries, workspace keys). See [docs/profiles.md](docs/profiles.md) for
+the matrix. `--profile` (or `bench-quality.config.json`) is explicit: choosing a
+profile whose required paths do not exist fails closed
+(`PROFILE_REQUIREMENTS_MISSING`) and writes nothing.
 
-## Available features
+## Configuration
 
-| Feature        | What it adds                                                        |
-| -------------- | ------------------------------------------------------------------- |
-| `commitlint`   | Conventional-commit linting (`@commitlint/cli`)                     |
-| `markdown`     | Markdown dead-link checking (`markdown-link-check`)                 |
-| `bench-guards` | Bench-specific guards vendored as `scripts/quality/*.mjs`: `check-i18n-guards`, `check-docs-consistency`, `check-ci-platforms`, `check-workflow-hygiene`, `check-rust-cfg-hygiene`, `check-rust-crates` (needs `typescript`), plus a trailing-whitespace fixer |
+| File | Owner | Purpose |
+| ---- | ----- | ------- |
+| `bench-quality.config.json` | you | profile, features, `excludeFeatures`, `acceptDrift`. Only ever read. |
+| `.bench-quality.json` | generator | what was installed, with hashes, managed keys and the batch id. Never edit by hand. |
 
-## Adding a feature
+Command line flags win over the file, the file wins over profile defaults. Both
+are described in [docs/profiles.md](docs/profiles.md).
 
-Append an entry to `src/features/index.mjs` describing `deps`, `files`, and
-`lefthook` commands, then drop the template(s) under `templates/`. The
-generator logic (vendoring, merge, hooks) is generic and needs no change.
+## What gets generated
+
+| Artifact | Managed by the generator | Notes |
+| -------- | ------------------------ | ----- |
+| `lefthook.yml` | only the named entries (a `managed-entries` comment lists them) | your own commands (`prettier`, `frontend`, `backend`, …) are preserved |
+| `scripts/quality/*.mjs` | whole files | hashes recorded; a local edit is reported, never overwritten |
+| `.husky/pre-commit`, `.husky/commit-msg` | whole files | POSIX `sh`; resolve `node` without requiring a specific version manager |
+| `package.json` | only the recorded `devDependencies` and `scripts` | your ranges, scripts and lifecycle hooks win |
+| `pnpm-workspace.yaml` | only `allowBuilds.lefthook` | pnpm 12 aborts an install while a dependency build script is unapproved |
+| `.markdown-link-check.json`, `commitlint.config.js` | whole files | |
+
+Everything else in those files stays byte-identical apart from YAML
+re-serialisation of `lefthook.yml`.
+
+## Hook behaviour
+
+`pre-commit` runs, in priority order:
+
+1. `changed-paths` — re-runs the gates of a scope whose paths were **deleted or
+   renamed** (lefthook filters deleted paths out of every file list, so this is
+   the only reliable channel).
+2. `partial-staging` — refuses the commit when a file is staged *and* has further
+   unstaged edits. This runs from the hook body, before lefthook, because
+   lefthook stashes unstaged changes before running commands.
+3. `whitespace` — fixes trailing whitespace and re-stages what it changed
+   (chained behind the same guard).
+4. feature and repository commands (`i18n-guards`, `docs-consistency`,
+   `ci-platforms`, `workflow-hygiene`, `rust-cfg-hygiene`, `rust-crates`,
+   `markdown-links`, …), gated by `glob`.
+
+`commit-msg` runs commitlint (Conventional Commits).
+
+Node is resolved as: an already working `node` on `PATH` first, then version
+managers as optional candidates driven by `.node-version`/`.nvmrc`. Failures
+carry stable codes: `NODE_NOT_FOUND`, `LEFTHOOK_NOT_INSTALLED`.
+
+## Maintenance flows
+
+| Situation | Command |
+| --------- | ------- |
+| Fresh clone, hooks not wired (`HOOKS_NOT_WIRED`) | `pnpm hooks:install` (also runs from `prepare`) |
+| The generator changed upstream | `node bin/index.mjs update`, then review the diff |
+| A managed file was edited locally (`FILE_DRIFT`) | restore it from git, or `update --accept-drift` (backup kept) |
+| A run was interrupted | `node bin/index.mjs doctor --recover` |
+| A stale lock is left behind | `node bin/index.mjs doctor --clear-stale-lock` |
+| Anything looks wrong | `node bin/index.mjs doctor --json` |
+
+State (lock, journal, per-batch backups) lives in
+`<git-common-dir>/bench-quality-cli/`, shared by linked worktrees and never
+committed. See [docs/troubleshooting.md](docs/troubleshooting.md) for the full
+diagnostic list.
+
+## Development (this repository)
+
+```bash
+pnpm install          # also wires .husky through the generated installer
+pnpm test             # node:test suites, including real lefthook hook runs
+pnpm run check:syntax # node --check sweep with the current runtime
+pnpm run verify       # check:syntax + tests
+pnpm run check:md-links
+```
+
+This repository uses the generator on itself (`init --profile node-tool`), so
+the gates above are the same ones consumers get. CI
+(`.github/workflows/quality.yml`) runs read-only checks on macOS with Node
+26.8.2 and 24.15.0 and a portable subset on Windows; no job publishes or writes.
 
 ## Notes
 
-- The generated `.husky` hooks resolve `node` from fnm default first, then
-  common paths, because git hooks run in a stripped environment.
-- `lefthook` is invoked via `node_modules/lefthook/bin/index.js` — never
-  `node_modules/.bin/lefthook` (that is a shell wrapper).
+- lefthook is invoked as `node node_modules/lefthook/bin/index.js run <hook>`;
+  `node_modules/.bin/lefthook` is a shell wrapper that breaks under `node`.
+- The generator never runs `git add`, `git commit` or `git push`, and never
+  publishes a package. Staging and committing stay manual.

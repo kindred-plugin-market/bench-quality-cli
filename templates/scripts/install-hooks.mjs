@@ -35,6 +35,13 @@ try {
 
 const missing = HOOKS.filter((hook) => !existsSync(path.join(repoRoot, HOOKS_PATH, hook)));
 if (missing.length > 0) {
+  // A published package carries this file plus a `prepare` script, but not the
+  // repository's generated hooks. Running inside an installed dependency is
+  // therefore a no-op, never an error (a git/url install would otherwise fail).
+  if (repoRoot.split(path.sep).includes("node_modules")) {
+    console.log("install-hooks: inside an installed package (no generated hooks here); nothing to wire.");
+    process.exit(0);
+  }
   console.error(`HOOK_MISSING: ${missing.map((hook) => `${HOOKS_PATH}/${hook}`).join(", ")} not found.`);
   console.error("Run the generator first (init/update) and commit the generated .husky directory.");
   process.exit(1);

@@ -65,7 +65,16 @@ function write(relative, content) {
   return writeFile(repo.file(relative), content);
 }
 
+// The generated hooks are POSIX shell scripts executed through .husky; Windows
+// runs the portable subset instead (see .github/workflows/quality.yml) and hook
+// execution there stays explicitly unverified rather than assumed.
+const windows = process.platform === "win32";
+
 before(async () => {
+  if (windows) {
+    skipReason = "POSIX hooks are not exercised on Windows (documented; verified on macOS)";
+    return;
+  }
   repo = await makeRepo({
     name: "hooks",
     files: {

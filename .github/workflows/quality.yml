@@ -1,0 +1,106 @@
+name: quality
+
+# Read-only verification only: no job in this workflow writes to the repository,
+# publishes a package or touches a release. Action versions are pinned to commit
+# SHAs with the human-readable tag in a comment (supply-chain hygiene).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Single source of truth for the package manager is package.json
+  # ("packageManager"); the workflow repeats the exact version so a mismatch is
+  # caught by tests/workflow-quality.test.mjs instead of drifting silently.
+  PNPM_VERSION: 12.4.1
+
+jobs:
+  quality:
+    name: quality (node 26.8.2 / macos)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 12.4.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Toolchain
+        run: |
+          node --version
+          pnpm --version
+      - name: Install (frozen)
+        run: pnpm install --frozen-lockfile
+      - name: Syntax (current runtime)
+        run: pnpm run check:syntax
+      - name: Tests
+        run: pnpm test
+      - name: Markdown links
+        run: pnpm run check:md-links
+      - name: Suite must not rewrite the lockfile
+        run: git diff --exit-code -- pnpm-lock.yaml
+
+  compatibility:
+    name: quality (node 24.15.0 / macos)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 12.4.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Minimum supported runtime: the contract this repository promises.
+          node-version: 24.15.0
+          cache: pnpm
+      - name: Toolchain
+        run: |
+          node --version
+          pnpm --version
+      - name: Install (frozen)
+        run: pnpm install --frozen-lockfile
+      - name: Syntax (minimum runtime)
+        run: pnpm run check:syntax
+      - name: Tests (minimum runtime)
+        run: pnpm test
+
+  windows:
+    name: syntax + unit (node 26.8.2 / windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 12.4.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install (frozen)
+        run: pnpm install --frozen-lockfile
+      - name: Syntax
+        run: pnpm run check:syntax
+      # The hook suite needs a POSIX shell and is verified on macOS; everything
+      # else must pass on Windows too (path handling, git plumbing, yaml).
+      - name: Tests (without the POSIX hook suite)
+        run: >-
+          node --test
+          tests/node-contract.test.mjs
+          tests/yaml.test.mjs
+          tests/transaction.test.mjs
+          tests/profiles.test.mjs
+          tests/hooks-wiring.test.mjs
+          tests/install.test.mjs

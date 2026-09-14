@@ -252,6 +252,9 @@ test("a concurrent run is refused while the lock is alive", async (t) => {
 });
 
 test("a failing write is rolled back and leaves no journal", async (t) => {
+  if (process.platform === "win32") {
+    return t.skip("permission-based write failure needs POSIX directory modes; verified on macOS");
+  }
   const repo = await makeRepo({ files: { "package.json": "{}\n" } });
   await mkdir(repo.file(".husky"), { recursive: true });
   await chmod(repo.file(".husky"), 0o555);

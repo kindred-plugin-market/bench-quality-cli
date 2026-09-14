@@ -110,6 +110,13 @@ test("hook bodies carry the iron rule and stable diagnostics", () => {
   // No personal absolute path may be baked into a generated hook.
   assert.doesNotMatch(body, /\/Users\/[a-z]/);
 
+  // A stripped environment (GUI git client) must still find the package manager
+  // and cargo, without hardcoding a machine's layout.
+  for (const dir of ["$HOME/.local/bin", "$HOME/.cargo/bin", "/usr/local/bin", "/opt/homebrew/bin"]) {
+    assert.ok(body.includes(dir), `hook must make ${dir} reachable`);
+  }
+  assert.match(body, /\.husky\/hooks\.env/, "machine-specific extras belong in a local, unmanaged file");
+
   // The partial-staging guard must run in the hook body, before lefthook:
   // lefthook stashes unstaged changes before running a pre-commit command, so a
   // command inside lefthook can never observe partial staging.

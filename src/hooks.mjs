@@ -25,6 +25,23 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo_root"
 
+# Strip nothing from PATH, then make the standard tool locations reachable:
+# git hooks run with a stripped environment (GUI clients, IDEs) where neither
+# the package manager nor cargo may be found. These are the conventional
+# locations, not a specific machine's layout; machine-specific extras belong in
+# .husky/hooks.env (optional, sourced below, never managed by the generator).
+for tool_dir in "$HOME/.local/bin" "$HOME/.cargo/bin" /usr/local/bin /opt/homebrew/bin; do
+  if [ -d "$tool_dir" ]; then
+    PATH="$PATH:$tool_dir"
+  fi
+done
+export PATH
+
+if [ -f .husky/hooks.env ]; then
+  # shellcheck disable=SC1091
+  . ./.husky/hooks.env
+fi
+
 if ! command -v node >/dev/null 2>&1; then
   pinned=""
   if [ -f .node-version ]; then pinned=$(tr -d '[:space:]' < .node-version); fi
@@ -34,8 +51,8 @@ if ! command -v node >/dev/null 2>&1; then
     "$HOME/.nvm/versions/node/v$pinned/bin" \\
     "$HOME/.asdf/installs/nodejs/$pinned/bin" \\
     "$HOME/.volta/bin" \\
-    /usr/local/bin \\
-    /opt/homebrew/bin
+    /opt/homebrew/opt/node/bin \\
+    /usr/local/opt/node/bin
   do
     if [ -n "$candidate" ] && [ -x "$candidate/node" ]; then
       PATH="$candidate:$PATH"

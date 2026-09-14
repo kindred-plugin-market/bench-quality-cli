@@ -1,0 +1,22 @@
+{
+  "name": "bench-quality-cli",
+  "version": "0.1.0",
+  "description": "Vendor opt-in Bench quality gates (commitlint / lefthook hooks / guards) into any repo via `npx bench-quality-cli init`. Delete-safe: generated artifacts live in the consumer repo, not here.",
+  "type": "module",
+  "bin": {
+    "bench-quality": "bin/index.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "templates"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kindred-plugin-market/bench-quality-cli.git"
+  }
+}

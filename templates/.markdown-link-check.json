@@ -1,0 +1,6 @@
+{
+  "ignorePatterns": [{ "pattern": "^http://localhost" }],
+  "timeout": "10s",
+  "retryOn404": true,
+  "aliveStatusCodes": [200, 206]
+}

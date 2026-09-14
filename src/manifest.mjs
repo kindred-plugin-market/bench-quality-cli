@@ -39,14 +39,27 @@ export async function readManifest(target) {
   return value;
 }
 
-export function buildManifest({ generator, features, profiles, files, packageJson, lefthook, git, batch }) {
+export function buildManifest({
+  generator,
+  features,
+  profile = null,
+  profiles,
+  files,
+  packageJson,
+  workspace,
+  lefthook,
+  git,
+  batch,
+}) {
   return {
     schemaVersion: SCHEMA_VERSION,
     generator,
+    profile,
     features,
     profiles,
     files,
     packageJson,
+    workspace,
     lefthook,
     git,
     batch,

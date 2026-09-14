@@ -10,6 +10,8 @@ import { resolve } from "node:path";
 
 import { CODES, CliError } from "./errors.mjs";
 import { applyPlan } from "./apply.mjs";
+import { readAuthorConfig } from "./config.mjs";
+import { DEFAULT_PROFILE, findProfile, profiles } from "./profiles/index.mjs";
 import { assertGitRepo, gitCommonDir, gitTopLevel, readHooksPath } from "./git.mjs";
 import { readManifest } from "./manifest.mjs";
 import { buildPlan, generatorInfo, summarizePlan } from "./plan.mjs";
@@ -21,9 +23,9 @@ import { promptFeatures } from "./prompt.mjs";
 import { statOrNull } from "./fsx.mjs";
 
 const FLAGS = {
-  init: ["target", "features", "yes", "dry-run", "accept-drift", "state-dir", "backup-dir", "json"],
-  update: ["target", "features", "yes", "dry-run", "accept-drift", "state-dir", "backup-dir", "json"],
-  remove: ["target", "features", "yes", "dry-run", "accept-drift", "state-dir", "backup-dir", "json"],
+  init: ["target", "features", "profile", "yes", "dry-run", "accept-drift", "state-dir", "backup-dir", "json"],
+  update: ["target", "features", "profile", "yes", "dry-run", "accept-drift", "state-dir", "backup-dir", "json"],
+  remove: ["target", "features", "profile", "yes", "dry-run", "accept-drift", "state-dir", "backup-dir", "json"],
   doctor: ["target", "json", "recover", "clear-stale-lock", "state-dir", "backup-dir"],
   list: ["json"],
   help: [],
@@ -176,30 +178,50 @@ async function writeMode(mode, args) {
   const { target } = await resolveTarget(args);
   await assertRepoRoot(target);
   const generator = await generatorInfo();
+  const manifest = await readManifest(target);
+  const { config } = await readAuthorConfig(target);
+
+  // Profile resolution order: --profile → bench-quality.config.json → the
+  // profile recorded by the last run → the default profile.
+  const explicitProfileId = args.profile ?? config?.profile ?? null;
+  const profileId = explicitProfileId ?? manifest?.profile ?? DEFAULT_PROFILE;
+  const profile = findProfile(profileId);
+  if (!profile) {
+    throw new CliError(CODES.UNKNOWN_PROFILE, `unknown profile: ${profileId}`, {
+      hint: `Available profiles: ${profiles.map((entry) => entry.id).join(", ")}.`,
+    });
+  }
 
   let featureIds = resolveFeatureIds(args);
+  if (featureIds === null && config?.features) {
+    const excluded = new Set(config.excludeFeatures ?? []);
+    featureIds = config.features.filter((id) => !excluded.has(id));
+  }
+  if (featureIds === null && mode === "remove") {
+    throw new CliError(CODES.UNKNOWN_FEATURE, "remove needs at least one feature id", {
+      hint: "Example: --features markdown",
+    });
+  }
   if (featureIds === null && mode === "update") {
-    // `update` without --features keeps exactly what is already enabled
+    // `update` without features keeps exactly what is already enabled
     // (additive semantics; `remove` is the only way to drop a feature).
     featureIds = [];
   }
   if (featureIds === null) {
     if (!process.stdin.isTTY) {
-      throw new CliError("FEATURES_REQUIRED", "no features specified and stdin is not a terminal", {
-        hint: "Pass --features <a,b,c> or --yes (all features).",
-      });
+      featureIds = [...profile.features];
+      // Diagnostics go to stderr so `--json` stays machine readable.
+      console.error(`no --features given; using profile "${profile.id}": ${featureIds.join(", ")}`);
+    } else {
+      featureIds = await promptFeatures();
     }
-    featureIds = await promptFeatures();
   }
+  const excluded = new Set(config?.excludeFeatures ?? []);
+  if (excluded.size > 0) featureIds = featureIds.filter((id) => !excluded.has(id));
   const unknown = featureIds.filter((id) => !registry.some((feature) => feature.id === id));
   if (unknown.length > 0) {
     throw new CliError(CODES.UNKNOWN_FEATURE, `unknown feature(s): ${unknown.join(", ")}`, {
       hint: `Available: ${registry.map((feature) => feature.id).join(", ")}.`,
-    });
-  }
-  if (mode === "remove" && featureIds.length === 0) {
-    throw new CliError(CODES.UNKNOWN_FEATURE, "remove needs at least one feature id", {
-      hint: "Example: --features markdown",
     });
   }
 
@@ -210,7 +232,9 @@ async function writeMode(mode, args) {
     mode,
     registry,
     featureIds,
-    acceptDrift: Boolean(args["accept-drift"]),
+    profile,
+    requireProfilePaths: mode !== "remove" && Boolean(explicitProfileId),
+    acceptDrift: Boolean(args["accept-drift"] ?? config?.acceptDrift),
     hooksPath,
   });
 
@@ -280,6 +304,7 @@ function printPlan(plan, { json = false } = {}) {
     return;
   }
   console.log(`bench-quality-cli — ${plan.mode} in ${plan.target}`);
+  console.log(`profile:  ${plan.profile ?? "(none)"}`);
   console.log(`features: ${plan.features.length ? plan.features.join(", ") : "(none)"}`);
   for (const write of plan.writes) {
     const marker = { create: "+", update: "~", unchanged: "=", delete: "-", conflict: "!" }[write.action] ?? "?";
@@ -357,8 +382,11 @@ async function doctor(args) {
       ? {
           schemaVersion: manifest.schemaVersion,
           generator: manifest.generator,
+          profile: manifest.profile ?? null,
           features: manifest.features,
           profiles: manifest.profiles,
+          managedScripts: Object.keys(manifest.packageJson?.managed?.scripts ?? {}),
+          workspaceKeys: Object.keys(manifest.workspace?.managedKeys ?? {}),
           batch: manifest.batch,
         }
       : null,
@@ -451,6 +479,7 @@ generator repo can be deleted without breaking already-initialized projects.
 
 Options:
   --target <dir>     target repository root (default: cwd, must be the git root)
+  --profile <id>     consumer profile (${profiles.map((entry) => entry.id).join(", ")})
   --features <ids>   comma-separated feature ids
   --yes, -y          non-interactive; selects every feature
   --dry-run          print the change plan and write nothing

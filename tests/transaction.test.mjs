@@ -55,8 +55,18 @@ test("init creates artifacts, manifest and hooks wiring", async (t) => {
   assert.equal(repo.git("config", "--get", "core.hooksPath").trim(), ".husky");
   assert.match(await readFile(repo.file(".husky/pre-commit"), "utf8"), /lefthook\/bin\/index\.js run pre-commit/);
   const pkg = JSON.parse(await readFile(repo.file("package.json"), "utf8"));
-  assert.equal(pkg.devDependencies.lefthook, "^2");
-  assert.equal(pkg.devDependencies["@commitlint/cli"], "^19");
+  assert.equal(pkg.devDependencies.lefthook, "^2.1.14");
+  assert.equal(pkg.devDependencies["@commitlint/cli"], "^21.2.2");
+  // Project entries and the install entry point come with the profile.
+  assert.equal(pkg.scripts["hooks:install"], "node scripts/quality/install-hooks.mjs");
+  assert.equal(pkg.scripts.prepare, "node scripts/quality/install-hooks.mjs");
+  const workspace = await readFile(repo.file("pnpm-workspace.yaml"), "utf8");
+  assert.match(workspace, /allowBuilds:\n  lefthook: false/);
+  assert.ok(await readIfExists(repo.file("scripts/quality/install-hooks.mjs")));
+  // The manifest records what is ours, so `remove` can drop it again.
+  assert.equal(manifest.packageJson.managed.scripts["hooks:install"], "node scripts/quality/install-hooks.mjs");
+  assert.deepEqual(manifest.workspace.managedKeys, { allowBuilds: { lefthook: false } });
+  assert.equal(manifest.profile, "node-tool");
 });
 
 test("re-running init is idempotent", async (t) => {
@@ -67,9 +77,10 @@ test("re-running init is idempotent", async (t) => {
   const before = await listFiles(repo.dir);
   const second = runCli(["init", "--features", "commitlint"], { cwd: repo.dir });
   assert.equal(second.status, 0, second.stderr);
-  // 7 files: commitlint.config.js, lefthook.yml, package.json, the two hook
-  // bodies and the two hook support files the pre-commit body depends on.
-  assert.match(second.stdout, /0 create, 0 update, 7 unchanged/);
+  // 9 files: commitlint.config.js, lefthook.yml, package.json,
+  // pnpm-workspace.yaml, the two hook bodies and the three hook support files
+  // (git-changes, partial-staging guard, installer).
+  assert.match(second.stdout, /0 create, 0 update, 9 unchanged/);
   assert.deepEqual(await listFiles(repo.dir), before);
 });
 

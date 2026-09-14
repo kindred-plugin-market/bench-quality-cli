@@ -73,9 +73,11 @@ export async function applyPlan(plan, { stateDir, backupDir, generator, logger =
     files,
     hooksPath: { before: plan.git.current ?? plan.git.previousHooksPath ?? null, after: plan.git.hooksPath ?? null },
     features: plan.features,
+    profile: plan.profile,
     profiles: plan.profiles,
     lefthook: plan.lefthook,
     packageJson: plan.packageJson,
+    workspace: plan.workspace,
   };
   const journalPath = await writeJournal(stateDir, journal);
   logger({ level: "debug", message: `journal written to ${journalPath}` });
@@ -95,9 +97,11 @@ export async function applyPlan(plan, { stateDir, backupDir, generator, logger =
     const manifest = buildManifest({
       generator,
       features: plan.features,
+      profile: plan.profile,
       profiles: plan.profiles,
       files: plan.files,
       packageJson: { managed: plan.packageJson.managed },
+      workspace: { managedKeys: plan.workspace?.managedKeys ?? {} },
       lefthook: { managedEntries: plan.lefthook.managedEntries },
       git: { hooksPath: plan.git.hooksPath, previousHooksPath: plan.git.previousHooksPath ?? null },
       batch: { id: plan.batchId, startedAt, finishedAt: new Date().toISOString() },

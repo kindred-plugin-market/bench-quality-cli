@@ -19,7 +19,7 @@ export const features = [
   {
     id: "commitlint",
     description: "Conventional-commit message linting via @commitlint/cli",
-    deps: { dev: { "@commitlint/cli": "^19", "@commitlint/config-conventional": "^19" } },
+    deps: { dev: { "@commitlint/cli": "^21.2.2", "@commitlint/config-conventional": "^21.2.2" } },
     files: [{ from: "commitlint.config.js", to: "commitlint.config.js" }],
     lefthook: {
       "commit-msg": {
@@ -60,7 +60,7 @@ export const features = [
     id: "bench-guards",
     description:
       "Bench-specific guards (i18n / docs / ci-platforms / workflow / rust-cfg / rust-crates) + partial-staging protection, vendored as scripts",
-    deps: { dev: { typescript: "^5" } },
+    deps: { dev: { typescript: "^6.0.3" } },
     files: [
       { from: "guards/check-changed-paths.mjs", to: "scripts/quality/check-changed-paths.mjs" },
       { from: "guards/check-i18n-guards.mjs", to: "scripts/quality/check-i18n-guards.mjs" },

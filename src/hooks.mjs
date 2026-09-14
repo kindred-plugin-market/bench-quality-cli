@@ -81,10 +81,13 @@ export function hookContent({ hook, passArg = false }) {
   return BODY.replace("%GUARD%", guard).replace("%EXEC%", exec);
 }
 
-/** Files the hook bodies depend on, needed whenever hooks are written. */
+/** Files the hook bodies/wiring depend on, needed whenever hooks are written. */
 export const HOOK_SUPPORT_FILES = [
   { from: "guards/git-changes.mjs", to: "scripts/quality/git-changes.mjs" },
   { from: "guards/guard-partial-staging.mjs", to: PARTIAL_STAGING_GUARD },
+  // Fresh clones need an install entry: the generator runs once, `.git/config`
+  // is not versioned, and without it a reviewer would commit with no gate.
+  { from: "scripts/install-hooks.mjs", to: "scripts/quality/install-hooks.mjs" },
 ];
 
 export function planHooks() {

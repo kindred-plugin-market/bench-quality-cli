@@ -2,6 +2,7 @@
 // do. `init` / `update` / `remove` only ever write what a plan produced, and
 // `--dry-run` prints the very same plan without touching the filesystem — so
 // "what the reviewer saw" and "what ran" cannot diverge.
+import { existsSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { CODES, CliError } from "./errors.mjs";
@@ -9,8 +10,10 @@ import { readJsonIfExists, readTextIfExists, sha256, statOrNull } from "./fsx.mj
 import { HOOK_SUPPORT_FILES, planHooks } from "./hooks.mjs";
 import { planLefthook } from "./lefthook.mjs";
 import { readManifest } from "./manifest.mjs";
-import { planPackageJson } from "./package-json.mjs";
+import { devDepsFor, planPackageJson, readManagedState, scriptsFor } from "./package-json.mjs";
+import { missingRequirements } from "./profiles/index.mjs";
 import { PACKAGE_ROOT, filesForFeatures, readTemplate } from "./templates.mjs";
+import { WORKSPACE_FILE, planWorkspaceYaml } from "./workspace-yaml.mjs";
 
 export const HOOKS_PATH_VALUE = ".husky";
 
@@ -128,10 +131,26 @@ export async function buildPlan({
   mode,
   registry,
   featureIds,
+  profile = null,
+  requireProfilePaths = false,
   profiles = [],
   acceptDrift = false,
   hooksPath = null,
 }) {
+  // Requirement check runs before anything is read or planned: an explicitly
+  // chosen profile must not be applied to a repository it does not describe.
+  if (profile && requireProfilePaths) {
+    const missing = missingRequirements(profile, { exists: (entry) => existsSync(join(target, entry)) });
+    if (missing.length > 0) {
+      throw new CliError(
+        CODES.PROFILE_REQUIREMENTS_MISSING,
+        `profile "${profile.id}" expects ${missing.join(", ")} to exist in ${target}`,
+        {
+          hint: "Point --target at the repository this profile is for, or choose another --profile; nothing was written.",
+        },
+      );
+    }
+  }
   const existing = await readManifest(target);
   if (mode === "update" && !existing) {
     throw new CliError("NOT_INITIALIZED", `${target} has no .bench-quality.json`, {
@@ -228,11 +247,16 @@ export async function buildPlan({
     action: lefthookRaw === null ? "create" : lefthookPlan.changed ? "update" : "unchanged",
   });
 
-  // 3) package.json — additive devDependencies only
+  // 3) package.json — additive devDependencies and project entries
+  const previousManaged = existing?.packageJson?.managed ?? {};
+  const previousManagedState = readManagedState(previousManaged);
   const packagePlan = await planPackageJson({
     target,
-    features: resolved,
-    previousManaged: existing?.packageJson?.managed ?? {},
+    requestedDeps: keepWiring ? devDepsFor(resolved) : {},
+    requestedScripts: keepWiring ? scriptsFor({ profile, features: resolved }) : {},
+    previousManaged: previousManagedState.devDependencies,
+    previousManagedScripts: previousManagedState.scripts,
+    addPrepare: keepWiring,
   });
   notes.push(...packagePlan.notes);
   writes.push({
@@ -243,6 +267,29 @@ export async function buildPlan({
     plannedHash: sha256(packagePlan.content),
     action: packagePlan.created ? "create" : packagePlan.changed ? "update" : "unchanged",
   });
+
+  // 3b) pnpm-workspace.yaml — managed keys the toolchain depends on (pnpm 12
+  //     refuses an install while lefthook's postinstall is unapproved).
+  const workspacePlan = await planWorkspaceYaml({
+    target,
+    workspaceKeys: keepWiring ? (profile?.workspaceKeys ?? {}) : {},
+    previousManaged: existing?.workspace?.managedKeys ?? {},
+  });
+  notes.push(...workspacePlan.notes);
+  if (keepWiring || workspacePlan.existed) {
+    writes.push({
+      relPath: WORKSPACE_FILE,
+      content: workspacePlan.content,
+      mode: 0o644,
+      kind: "workspace",
+      plannedHash: sha256(workspacePlan.content),
+      action: workspacePlan.existed
+        ? workspacePlan.changed
+          ? "update"
+          : "unchanged"
+        : "create",
+    });
+  }
 
   // 4) retire files we used to manage but no longer do (feature removed, or a
   //    template a newer generator version stopped shipping). A file is retired
@@ -290,6 +337,8 @@ export async function buildPlan({
     files[write.relPath] = write.plannedHash;
   }
 
+  const profileIds = uniqueIds([...(existing?.profiles ?? []), ...profiles, ...(profile ? [profile.id] : [])]);
+
   return {
     batchId: newBatchId(),
     target,
@@ -297,7 +346,8 @@ export async function buildPlan({
     acceptDrift,
     features: resolved.map((feature) => feature.id),
     removedFeatures: removedIds,
-    profiles: uniqueIds([...(existing?.profiles ?? []), ...profiles]),
+    profile: profile?.id ?? null,
+    profiles: profileIds,
     writes,
     conflicts,
     notes,
@@ -305,8 +355,10 @@ export async function buildPlan({
     packageJson: {
       managed: packagePlan.managed,
       devDependencies: packagePlan.devDependencies,
+      scripts: packagePlan.scripts,
       changed: packagePlan.changed,
     },
+    workspace: { managedKeys: workspacePlan.managed },
     git: {
       hooksPath: nextHooksPath,
       previousHooksPath,

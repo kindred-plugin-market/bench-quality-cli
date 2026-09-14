@@ -25,7 +25,9 @@ export async function hashTargetFile(target, relPath) {
 }
 
 function writableWrites(plan) {
-  return plan.writes.filter((write) => write.action === "create" || write.action === "update");
+  return plan.writes.filter(
+    (write) => write.action === "create" || write.action === "update" || write.action === "delete",
+  );
 }
 
 /**
@@ -49,6 +51,7 @@ export async function applyPlan(plan, { stateDir, backupDir, generator, logger =
       plannedHash: write.plannedHash,
       backupPath: null,
       mode: write.mode,
+      deleted: write.action === "delete",
     };
     if (raw !== null) {
       const dest = join(batchBackupDir, write.relPath);
@@ -80,6 +83,12 @@ export async function applyPlan(plan, { stateDir, backupDir, generator, logger =
   try {
     for (const write of writes) {
       if (write.kind === "manifest") continue; // written below, from the merged state
+      if (write.action === "delete") {
+        // "Move to trash" instead of unlinking: retired artifacts stay
+        // recoverable next to the batch backups.
+        await quarantineFile(join(plan.target, write.relPath), join(batchBackupDir, "removed"), write.relPath);
+        continue;
+      }
       await writeFileAtomic(join(plan.target, write.relPath), write.content, { mode: write.mode ?? 0o644 });
     }
 
@@ -139,6 +148,17 @@ export async function rollbackBatch(journal, { backupDir }) {
 
     if (current === entry.beforeHash) {
       untouched.push(entry.relPath);
+      continue;
+    }
+    if (entry.deleted) {
+      // Retired file: it is gone when we removed it, and a third-party file at
+      // the same path must not be overwritten by the restore.
+      if (current === null) {
+        await copyFile(entry.backupPath, absolute);
+        restored.push(entry.relPath);
+      } else {
+        conflicts.push({ relPath: entry.relPath, reason: "path was recreated after the batch removed the file" });
+      }
       continue;
     }
     if (entry.existed) {

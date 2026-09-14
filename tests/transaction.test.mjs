@@ -182,6 +182,21 @@ test("remove drops only the removed feature", async (t) => {
   assert.doesNotMatch(yaml, /markdown-links:/);
   assert.match(yaml, /commitlint:/);
   assert.match(yaml, /prettier:/);
+  assert.equal(await readIfExists(repo.file(".markdown-link-check.json")), null, "retired file is removed");
+  assert.ok(await readIfExists(repo.file("commitlint.config.js")), "kept feature keeps its artifacts");
+  assert.equal(await readIfExists(repo.file(".markdown-link-check.json")), null);
+});
+
+test("remove preserves a retired file that was edited locally", async (t) => {
+  const repo = await makeRepo({ files: { "package.json": "{}\n" } });
+  t.after(repo.cleanup);
+  assert.equal(runCli(["init", "--features", "commitlint,markdown"], { cwd: repo.dir }).status, 0);
+  await writeFile(repo.file(".markdown-link-check.json"), '{\n  "timeout": "30s"\n}\n');
+
+  const result = runCli(["remove", "--features", "markdown"], { cwd: repo.dir });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /left in place \(delete it by hand if unused\)/);
+  assert.equal(await readFile(repo.file(".markdown-link-check.json"), "utf8"), '{\n  "timeout": "30s"\n}\n');
 });
 
 test("remove of the last feature unwires the hooks path", async (t) => {
@@ -193,6 +208,8 @@ test("remove of the last feature unwires the hooks path", async (t) => {
   assert.equal(repo.git("config", "--get", "core.hooksPath").trim(), "");
   const manifest = JSON.parse(await readFile(repo.file(".bench-quality.json"), "utf8"));
   assert.deepEqual(manifest.features, []);
+  assert.equal(await readIfExists(repo.file(".husky/pre-commit")), null, "orphan hooks are retired");
+  assert.deepEqual(manifest.files["commitlint.config.js"], undefined);
 });
 
 test("a concurrent run is refused while the lock is alive", async (t) => {

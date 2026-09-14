@@ -280,7 +280,7 @@ function printPlan(plan, { json = false } = {}) {
   console.log(`bench-quality-cli — ${plan.mode} in ${plan.target}`);
   console.log(`features: ${plan.features.length ? plan.features.join(", ") : "(none)"}`);
   for (const write of plan.writes) {
-    const marker = { create: "+", update: "~", unchanged: "=", conflict: "!" }[write.action] ?? "?";
+    const marker = { create: "+", update: "~", unchanged: "=", delete: "-", conflict: "!" }[write.action] ?? "?";
     console.log(`  ${marker} ${write.action.padEnd(9)} ${write.relPath}`);
   }
   for (const note of plan.notes) {

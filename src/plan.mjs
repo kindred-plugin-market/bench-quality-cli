@@ -230,7 +230,38 @@ export async function buildPlan({
     action: packagePlan.created ? "create" : packagePlan.changed ? "update" : "unchanged",
   });
 
-  // 4) git hooksPath wiring
+  // 4) retire files we used to manage but no longer do (feature removed, or a
+  //    template a newer generator version stopped shipping). A file is retired
+  //    only while its content is still exactly what we last wrote; anything
+  //    edited locally is preserved and reported.
+  const written = new Set(writes.map((write) => write.relPath));
+  for (const [relPath, recordedHash] of Object.entries(previousFiles)) {
+    if (written.has(relPath)) continue;
+    const current = await readTextIfExists(join(target, relPath));
+    if (current === null) {
+      notes.push({ level: "info", message: `${relPath} is already gone; dropping it from the manifest` });
+      continue;
+    }
+    if (sha256(current) !== recordedHash) {
+      notes.push({
+        level: "warn",
+        message: `${relPath} is no longer managed but was edited locally; left in place (delete it by hand if unused)`,
+      });
+      continue;
+    }
+    const { rel } = assertInsideTarget(target, relPath);
+    await assertNoSymlink(target, rel);
+    writes.push({
+      relPath: rel,
+      content: null,
+      mode: 0o644,
+      kind: "retired",
+      plannedHash: null,
+      action: "delete",
+    });
+  }
+
+  // 5) git hooksPath wiring
   // `previousHooksPath` is the value that existed before the generator ever ran;
   // it must survive re-runs (including an explicit `null`) so that removing the
   // last feature restores the original wiring instead of keeping ours.
@@ -240,7 +271,10 @@ export async function buildPlan({
   const hooksPathChanged = (hooksPath ?? null) !== (nextHooksPath ?? null);
 
   const files = {};
-  for (const write of writes) files[write.relPath] = write.plannedHash;
+  for (const write of writes) {
+    if (write.action === "delete") continue;
+    files[write.relPath] = write.plannedHash;
+  }
 
   return {
     batchId: newBatchId(),

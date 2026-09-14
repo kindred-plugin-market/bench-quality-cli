@@ -57,7 +57,7 @@ git add -A && git commit -m "chore: add Bench quality gates"
 | -------------- | ------------------------------------------------------------------- |
 | `commitlint`   | Conventional-commit linting (`@commitlint/cli`)                     |
 | `markdown`     | Markdown dead-link checking (`markdown-link-check`)                 |
-| `bench-guards` | Bench-specific guards vendored as `scripts/quality/*.mjs`           |
+| `bench-guards` | Bench-specific guards vendored as `scripts/quality/*.mjs`: `check-i18n-guards`, `check-docs-consistency`, `check-ci-platforms`, `check-workflow-hygiene`, `check-rust-cfg-hygiene`, `check-rust-crates` (needs `typescript`), plus a trailing-whitespace fixer |
 
 ## Adding a feature
 

@@ -1,0 +1,14 @@
+pre-commit:
+  commands:
+    prettier:
+      glob: "*.{ts,tsx}"
+      run: pnpm exec prettier --write {staged_files}
+      stage_fixed: true
+    markdown:
+      glob: "*.md"
+      run: node scripts/quality/check-markdown-links.mjs {staged_files}
+  scripts:
+    frontend:
+      runner: pnpm run lint:fe
+      only:
+        - src/**

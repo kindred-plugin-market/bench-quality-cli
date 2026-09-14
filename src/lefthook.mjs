@@ -9,8 +9,24 @@
 //     their values are never rewritten,
 //   - our entries are replaced in place; obsolete ones recorded from the
 //     previous run are dropped, including the commands/scripts migration case.
+import { CORE_SCHEMA, dump, load, mergeTag } from "js-yaml";
+
 import { CODES, CliError } from "./errors.mjs";
-import yaml from "js-yaml";
+
+// js-yaml 5 has no default export and moved schemas/options around.
+//
+// Schema choice (diffed against js-yaml 4.3.2 over the constructs that changed
+// between YAML 1.1 and 1.2, see evidence/CLI/C04):
+//   CORE_SCHEMA + mergeTag matches 4.3.2 exactly for plain booleans, yes/no/on/off
+//   (strings in both), leading zeros, exponents, hex, 0o-octal, merge keys,
+//   quoted scalars and nested lists. Explicit YAML 1.1 tags (`!!binary`,
+//   `!!set`) and `!!timestamp` are not part of the core schema any more, so
+//   they fail closed with a precise diagnostic instead of being silently
+//   coerced — YAML11_SCHEMA would keep them but changes ordinary scalars
+//   (1e3/0o17 become strings, 017 becomes 15), which is the worse trade for a
+//   file we rewrite.
+const HOOK_SCHEMA = CORE_SCHEMA.withTags(mergeTag);
+const DUMP_OPTIONS = { lineWidth: -1, noRefs: true, quoteStyle: "double" };
 
 const META_RE = /#\s*bench-quality-cli:managed-entries\s+(.*)/;
 const HEADER =
@@ -36,11 +52,26 @@ export function parseLefthookConfig(raw, pathname = "lefthook.yml") {
   }
   let doc;
   try {
-    doc = yaml.load(raw);
+    doc = load(raw, { schema: HOOK_SCHEMA });
   } catch (error) {
-    throw new CliError(CODES.INVALID_YAML, `${pathname} is not valid YAML (${error.message.split("\n")[0]})`, {
-      hint: "Fix the file by hand and re-run; nothing was written.",
-    });
+    const firstLine = String(error.message).split("\n")[0];
+    if (/expected a document, but the input is empty/.test(firstLine)) {
+      // js-yaml 5 throws here where 4.x returned undefined; the CLI keeps the
+      // same stable diagnostic for "present but has no document".
+      throw new CliError(CODES.EMPTY_EXISTING_LEFTHOOK_CONFIG, `${pathname} contains no YAML document`, {
+        hint: "A comment-only file cannot be merged; restore or delete it deliberately, then re-run.",
+      });
+    }
+    const deprecatedTag = /unknown (?:scalar|mapping|sequence) tag/.test(firstLine);
+    throw new CliError(
+      CODES.INVALID_YAML,
+      `${pathname} is not valid YAML for the supported schema (${firstLine})`,
+      {
+        hint: deprecatedTag
+          ? "YAML 1.1 tags (!!binary, !!set, !!timestamp) are no longer part of the core schema; quote or replace the value by hand and re-run. Nothing was written."
+          : "Fix the file by hand and re-run; nothing was written.",
+      },
+    );
   }
   if (doc === null || doc === undefined) {
     throw new CliError(CODES.EMPTY_EXISTING_LEFTHOOK_CONFIG, `${pathname} has no YAML document`, {
@@ -132,11 +163,7 @@ export function planLefthook({ raw, features, previousEntries = [] }) {
     if (doc[hook]?.scripts && Object.keys(doc[hook].scripts).length === 0) delete doc[hook].scripts;
   }
 
-  const content = `${HEADER}# bench-quality-cli:managed-entries ${entries.join(",")}\n${yaml.dump(doc, {
-    lineWidth: -1,
-    noRefs: true,
-    quotingType: '"',
-  })}`;
+  const content = `${HEADER}# bench-quality-cli:managed-entries ${entries.join(",")}\n${dump(doc, DUMP_OPTIONS)}`;
 
   // `removed` reports entries that are gone for good (their feature was dropped
   // or renamed), not the ones we just re-created under the same key.
@@ -159,6 +186,6 @@ export function stripManagedEntries(raw, entries) {
     if (doc[hook]?.commands && Object.keys(doc[hook].commands).length === 0) delete doc[hook].commands;
     if (doc[hook]?.scripts && Object.keys(doc[hook].scripts).length === 0) delete doc[hook].scripts;
   }
-  const content = yaml.dump(doc, { lineWidth: -1, noRefs: true, quotingType: '"' });
+  const content = dump(doc, DUMP_OPTIONS);
   return { content, changed: content !== raw };
 }

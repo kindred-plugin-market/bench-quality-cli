@@ -356,6 +356,17 @@ test("recovery refuses to overwrite work done after the interrupted batch", asyn
   assert.notEqual(await readJournal(stateDir), null, "the journal is kept for manual review");
 });
 
+test("failures print the actionable hint", async (t) => {
+  const repo = await makeRepo({ files: { "package.json": "{}\n", "lefthook.yml": "\n" } });
+  t.after(repo.cleanup);
+  const result = runCli(["init", "--features", "commitlint"], { cwd: repo.dir });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /EMPTY_EXISTING_LEFTHOOK_CONFIG/);
+  // Regression: `return <promise>` inside the command switch used to drop every
+  // async rejection, so the hint never reached the user.
+  assert.match(result.stderr, /hint: /);
+});
+
 test("arguments fail closed", async (t) => {
   const repo = await makeRepo({ files: { "package.json": "{}\n" } });
   t.after(repo.cleanup);

@@ -46,16 +46,18 @@ export async function run(argv) {
         console.log(generator.version);
         return;
       }
+      // `return await` (not `return promise`): otherwise a rejection escapes
+      // this try/catch, and the actionable `hint` never reaches the user.
       case "list":
-        return listFeatures(parseArgs("list", rest));
+        return await listFeatures(parseArgs("list", rest));
       case "init":
-        return writeMode("init", parseArgs("init", rest));
+        return await writeMode("init", parseArgs("init", rest));
       case "update":
-        return writeMode("update", parseArgs("update", rest));
+        return await writeMode("update", parseArgs("update", rest));
       case "remove":
-        return writeMode("remove", parseArgs("remove", rest));
+        return await writeMode("remove", parseArgs("remove", rest));
       case "doctor":
-        return doctor(parseArgs("doctor", rest));
+        return await doctor(parseArgs("doctor", rest));
       default:
         throw new CliError(CODES.UNKNOWN_COMMAND, `unknown command: ${command}`, {
           hint: "Known commands: init, update, remove, doctor, list, help.",

@@ -10,7 +10,7 @@ import { makeRepo, runCli } from "./helpers/cli-fixture.mjs";
 import { features } from "../src/features/index.mjs";
 import { hookContent } from "../src/hooks.mjs";
 import { TEMPLATES_DIR } from "../src/templates.mjs";
-import yaml from "js-yaml";
+import { load as loadYaml } from "js-yaml";
 
 test("no managed entry uses the scripts/only style or a bogus root", () => {
   const raw = features.map((feature) => JSON.stringify(feature.lefthook ?? {})).join("\n");
@@ -63,7 +63,7 @@ test("every vendored hook reference resolves to a file the plan installs", async
   const result = runCli(["init", "--features", "commitlint,markdown,bench-guards", "--yes"], { cwd: repo.dir });
   assert.equal(result.status, 0, result.stderr);
 
-  const doc = yaml.load(await readFile(repo.file("lefthook.yml"), "utf8"));
+  const doc = loadYaml(await readFile(repo.file("lefthook.yml"), "utf8"));
   const installed = await readdir(repo.file("scripts/quality"));
   for (const [hookName, hook] of Object.entries(doc)) {
     for (const command of Object.values(hook?.commands ?? {})) {

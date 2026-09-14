@@ -1,72 +1,97 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import yaml from "js-yaml";
 
-const START = "# >>> bench-quality-cli:managed >>>";
-const END = "# <<< bench-quality-cli:managed <<<";
+// Track which (hook.kind.name) entries we own so re-runs / `update` can drop
+// obsolete ones without touching consumer-authored entries.
+const META_RE = /#\s*bench-quality-cli:managed-entries\s+(.*)/;
 
-// Collect every feature's lefthook spec, keyed by hook name. Supports both
-// `commands` (run per staged file) and `scripts` (runner + `only` path filter)
-// styles — mirroring what real repos need.
-function buildBlock(chosen) {
+// Collect every feature's lefthook spec, keyed by hook then by entry name,
+// for BOTH `commands` (run per staged file) and `scripts` (runner + `only`).
+function buildManaged(chosen) {
   const hooks = {};
   for (const f of chosen) {
     for (const [hook, spec] of Object.entries(f.lefthook ?? {})) {
-      const entry = (hooks[hook] ??= { commands: [], scripts: [] });
-      entry.commands.push(...(spec.commands ?? []));
-      entry.scripts.push(...(spec.scripts ?? []));
+      const entry = (hooks[hook] ??= { commands: {}, scripts: {} });
+      for (const c of spec.commands ?? []) entry.commands[c.name] = c;
+      for (const s of spec.scripts ?? []) entry.scripts[s.name] = s;
     }
   }
-
-  let out = "";
-  for (const [hook, entry] of Object.entries(hooks)) {
-    out += `${hook}:\n`;
-    if (entry.commands.length) {
-      out += "  commands:\n";
-      for (const c of entry.commands) {
-        out += `    ${c.name}:\n`;
-        if (c.root) out += `      root: "${c.root}"\n`;
-        if (c.stage_fixed) out += "      stage_fixed: true\n";
-        out += `      run: ${yamlString(c.run)}\n`;
-        if (c.fail_text) out += `      fail_text: ${yamlString(c.fail_text)}\n`;
-      }
-    }
-    if (entry.scripts.length) {
-      out += "  scripts:\n";
-      for (const s of entry.scripts) {
-        out += `    ${s.name}:\n`;
-        out += `      runner: ${yamlString(s.runner)}\n`;
-        if (s.stage_fixed) out += "      stage_fixed: true\n";
-        if (s.only?.length) {
-          out += "      only:\n";
-          for (const p of s.only) out += `        - ${yamlString(p)}\n`;
-        }
-      }
-    }
-  }
-  return out;
+  return hooks;
 }
 
-function yamlString(s) {
-  return /[{"}:#]/.test(s) ? JSON.stringify(s) : s;
+function toYamlCommand(c) {
+  const o = {};
+  if (c.root) o.root = c.root;
+  if (c.stage_fixed) o.stage_fixed = true;
+  o.run = c.run;
+  if (c.fail_text) o.fail_text = c.fail_text;
+  return o;
 }
 
-// Idempotent, non-destructive merge: we only own the managed block, so any
-// consumer edits outside the markers survive re-runs (init / update).
+function toYamlScript(s) {
+  const o = { runner: s.runner };
+  if (s.stage_fixed) o.stage_fixed = true;
+  if (s.only?.length) o.only = s.only;
+  return o;
+}
+
+// Idempotent, NON-DESTRUCTIVE merge: we only own the named entries. Any
+// consumer entry outside our managed set (e.g. prettier, rust-fmt, frontend,
+// backend) is preserved. Re-running replaces our entries in place — no
+// duplicate top-level `pre-commit:` keys, which a naive append would create.
 export async function mergeLefthook(target, chosen) {
   const path = join(target, "lefthook.yml");
-  const managed = `${START}\n${buildBlock(chosen)}${END}\n`;
-  let content = "";
+  let doc = {};
+  let prevManaged = [];
   try {
-    content = await readFile(path, "utf8");
+    const raw = await readFile(path, "utf8");
+    doc = yaml.load(raw) || {};
+    const m = raw.match(META_RE);
+    if (m) prevManaged = m[1].split(",").filter(Boolean);
   } catch {
-    content = "# Managed block below is owned by bench-quality-cli.\n";
+    doc = {};
   }
-  const re = new RegExp(`${escapeRe(START)}[\\s\\S]*?${escapeRe(END)}\\n?`);
-  content = re.test(content) ? content.replace(re, managed) : content + `\n${managed}`;
-  await writeFile(path, content);
-  console.log("  + merged lefthook.yml (managed block)");
-}
 
-function escapeRe(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const managed = buildManaged(chosen);
+  const managedEntries = [];
+
+  // Drop previously-managed entries that are no longer requested.
+  for (const key of prevManaged) {
+    const [hook, kind, name] = key.split(".");
+    if (doc[hook]?.[kind]?.[name] !== undefined) delete doc[hook][kind][name];
+  }
+
+  // Add current managed entries. When adding under `commands`, clear a same
+  // name under `scripts` (and vice-versa) so a managed entry that migrated
+  // between the two styles doesn't run twice.
+  for (const [hook, entry] of Object.entries(managed)) {
+    doc[hook] = doc[hook] || {};
+    doc[hook].commands = doc[hook].commands || {};
+    doc[hook].scripts = doc[hook].scripts || {};
+    for (const [name, c] of Object.entries(entry.commands)) {
+      delete doc[hook].scripts[name];
+      doc[hook].commands[name] = toYamlCommand(c);
+      managedEntries.push(`${hook}.commands.${name}`);
+    }
+    for (const [name, s] of Object.entries(entry.scripts)) {
+      delete doc[hook].commands[name];
+      doc[hook].scripts[name] = toYamlScript(s);
+      managedEntries.push(`${hook}.scripts.${name}`);
+    }
+  }
+
+  // Prune empty command/script blocks for tidiness.
+  for (const hook of Object.keys(doc)) {
+    if (doc[hook].commands && Object.keys(doc[hook].commands).length === 0)
+      delete doc[hook].commands;
+    if (doc[hook].scripts && Object.keys(doc[hook].scripts).length === 0)
+      delete doc[hook].scripts;
+  }
+
+  const metaLine = `# bench-quality-cli:managed-entries ${managedEntries.join(",")}`;
+  const header = "# Managed entries below are owned by bench-quality-cli (init/update). Do not edit by hand.\n";
+  const dumped = yaml.dump(doc, { lineWidth: -1, noRefs: true, quotingType: '"' });
+  await writeFile(path, `${header}${metaLine}\n${dumped}`);
+  console.log("  + merged lefthook.yml (managed entries)");
 }

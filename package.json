@@ -6,6 +6,9 @@
   "bin": {
     "bench-quality": "bin/index.mjs"
   },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
   "files": [
     "bin",
     "src",

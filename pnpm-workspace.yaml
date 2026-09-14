@@ -1,0 +1,7 @@
+# pnpm 12 refuses to complete an install while a dependency build script is
+# ignored (ERR_PNPM_IGNORED_BUILDS). lefthook ships a postinstall that would
+# install its own hooks over the generated .husky directory, so it is denied
+# explicitly rather than approved — the same policy this generator writes into
+# consumer repositories via the profiles.
+allowBuilds:
+  lefthook: false

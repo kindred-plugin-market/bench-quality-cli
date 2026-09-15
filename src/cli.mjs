@@ -14,10 +14,10 @@ import { readAuthorConfig } from "./config.mjs";
 import { DEFAULT_PROFILE, findProfile, profiles } from "./profiles/index.mjs";
 import { assertGitRepo, gitCommonDir, gitTopLevel, readHooksPath } from "./git.mjs";
 import { readManifest } from "./manifest.mjs";
-import { buildPlan, generatorInfo, summarizePlan } from "./plan.mjs";
+import { buildPlan, classifyPlan, generatorInfo, summarizePlan } from "./plan.mjs";
 import { features as registry } from "./features/index.mjs";
 import { inspectRecovery, recoverFromJournal } from "./recover.mjs";
-import { detectDrift, summarizeDrift } from "./manifest.mjs";
+import { summarizeDrift } from "./manifest.mjs";
 import { acquireRepoLock, backupDirFor, classifyLock, clearLock, readJournal, readLock, resolveStateDir } from "./state.mjs";
 import { promptFeatures } from "./prompt.mjs";
 import { statOrNull } from "./fsx.mjs";
@@ -361,9 +361,43 @@ async function doctor(args) {
   }
   const hooksPath = top ? await readHooksPath(target) : null;
 
-  const drift = manifest ? await detectDrift(target, manifest.files ?? {}) : { drifted: [], unchanged: [], missing: [] };
-  if (drift.drifted.length > 0) findings.push({ level: "warn", code: "FILE_DRIFT", paths: drift.drifted });
-  if (drift.missing.length > 0) findings.push({ level: "warn", code: "FILE_MISSING", paths: drift.missing });
+  // Drift 判定必须与 update 完全同源（C11）：这里跑一份 update 的只读计划，按
+  // 「逐字节托管文件 vs 语义合并文件」分类，而不是拿整文件哈希去比——
+  // 后者把 package.json/pnpm-workspace.yaml 的合法消费者改动也报成 drift。
+  let managed =
+    manifest === null
+      ? { localEdits: [], behindTemplate: [], missing: [], mergeRefresh: [], consistent: [], error: null }
+      : null;
+  if (manifest) {
+    try {
+      const auditPlan = await buildPlan({
+        target,
+        mode: "update",
+        registry,
+        featureIds: manifest.features ?? [],
+        hooksPath,
+      });
+      managed = classifyPlan(auditPlan);
+    } catch (error) {
+      managed = { localEdits: [], behindTemplate: [], missing: [], mergeRefresh: [], consistent: [], error };
+      findings.push({
+        level: "warn",
+        code: error.code ?? "MANAGED_STATE_UNREADABLE",
+        message: error.message,
+      });
+    }
+  }
+  const drift = managed
+    ? { drifted: managed.localEdits, unchanged: managed.consistent, missing: managed.missing }
+    : { drifted: [], unchanged: [], missing: [] };
+  if (managed?.localEdits.length > 0) findings.push({ level: "warn", code: "FILE_DRIFT", paths: managed.localEdits });
+  if (managed?.missing.length > 0) findings.push({ level: "warn", code: "FILE_MISSING", paths: managed.missing });
+  if (managed?.behindTemplate.length > 0) {
+    findings.push({ level: "info", code: "FILE_BEHIND_TEMPLATE", paths: managed.behindTemplate });
+  }
+  if (managed?.mergeRefresh.length > 0) {
+    findings.push({ level: "info", code: "MANAGED_ENTRIES_REFRESH", paths: managed.mergeRefresh });
+  }
   if (lockStatus.state === "stale") findings.push({ level: "warn", code: CODES.STALE_LOCK, pid: lock?.pid });
   if (lockStatus.state === "alive") findings.push({ level: "warn", code: CODES.REPO_LOCKED, pid: lock?.pid });
   if (journal) findings.push({ level: "error", code: CODES.RECOVERY_REQUIRED, batchId: journal.batchId });
@@ -391,7 +425,15 @@ async function doctor(args) {
         }
       : null,
     managedFiles: manifest ? Object.keys(manifest.files ?? {}).length : 0,
-    drift: summarizeDrift(drift),
+    drift: { ...summarizeDrift(drift), behindTemplate: managed?.behindTemplate ?? [] },
+    managed: managed
+      ? {
+          localEdits: managed.localEdits,
+          behindTemplate: managed.behindTemplate,
+          missing: managed.missing,
+          mergeRefresh: managed.mergeRefresh,
+        }
+      : null,
     lock: lockStatus.state === "none" ? null : { state: lockStatus.state, ...lock },
     journal: journal ? { batchId: journal.batchId, startedAt: journal.startedAt, files: journal.files.length } : null,
     findings,
@@ -449,8 +491,11 @@ function printDoctor(report) {
     `generated:   ${report.manifest ? `v${report.manifest.schemaVersion} by ${report.manifest.generator?.version} — ${report.manifest.features.join(", ") || "no features"}` : "(no .bench-quality.json)"}`,
   );
   console.log(
-    `files:       ${report.managedFiles} managed, ${report.drift.unchanged} unchanged, ${report.drift.drifted} drifted, ${report.drift.missing} missing`,
+    `files:       ${report.managedFiles} managed, ${report.drift.unchanged} consistent, ${report.drift.drifted} drifted (local edits), ${report.drift.missing} missing, ${report.drift.behindTemplate.length} behind template`,
   );
+  if (report.managed?.mergeRefresh.length > 0) {
+    console.log(`             ${report.managed.mergeRefresh.length} merged file(s) need a refresh: ${report.managed.mergeRefresh.join(", ")}`);
+  }
   console.log(`lock:        ${report.lock ? `${report.lock.state} (pid ${report.lock.pid})` : "none"}`);
   console.log(`journal:     ${report.journal ? `${report.journal.batchId} (${report.journal.files} files)` : "none"}`);
   if (report.findings.length === 0) {

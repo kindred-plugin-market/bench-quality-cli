@@ -53,7 +53,9 @@ export function assertInsideTarget(target, relPath) {
       hint: "Refusing to write; this is a generator bug, please report it.",
     });
   }
-  return { root, full, rel: relative(root, full) };
+  // 仓库相对路径一律用 POSIX 分隔符：它既是 manifest 的键、也是 plan/doctor 的输出，
+  // 若在 Windows 上变成 `scripts\quality\x.mjs`，同一份 manifest 会在平台间来回改写。
+  return { root, full, rel: relative(root, full).split(sep).join("/") };
 }
 
 /** Fail closed when a managed path (or one of its parents) is a symlink. */

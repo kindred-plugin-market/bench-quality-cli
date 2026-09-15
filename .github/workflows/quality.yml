@@ -20,7 +20,7 @@ env:
   # Single source of truth for the package manager is package.json
   # ("packageManager"); the workflow repeats the exact version so a mismatch is
   # caught by tests/workflow-quality.test.mjs instead of drifting silently.
-  PNPM_VERSION: 12.4.1
+  PNPM_VERSION: 12.4.2
 
 jobs:
   quality:
@@ -32,7 +32,7 @@ jobs:
       # pnpm/action-setup 的 Windows 自安装器在 v11→v12 切换后会留下指向旧布局的
       # shim（pnpm 不可见），改为 npm 全局安装，三平台一致且少一个第三方 action。
       - name: Install pnpm
-        run: npm install -g pnpm@12.4.1
+        run: npm install -g pnpm@12.4.2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
@@ -61,7 +61,7 @@ jobs:
       # pnpm/action-setup 的 Windows 自安装器在 v11→v12 切换后会留下指向旧布局的
       # shim（pnpm 不可见），改为 npm 全局安装，三平台一致且少一个第三方 action。
       - name: Install pnpm
-        run: npm install -g pnpm@12.4.1
+        run: npm install -g pnpm@12.4.2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Minimum supported runtime: the contract this repository promises.
@@ -87,7 +87,7 @@ jobs:
       # pnpm/action-setup 的 Windows 自安装器在 v11→v12 切换后会留下指向旧布局的
       # shim（pnpm 不可见），改为 npm 全局安装，三平台一致且少一个第三方 action。
       - name: Install pnpm
-        run: npm install -g pnpm@12.4.1
+        run: npm install -g pnpm@12.4.2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version

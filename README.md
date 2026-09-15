@@ -13,7 +13,7 @@ already-initialized project**.
 | Tool | Version | Where it is declared |
 | ---- | ------- | -------------------- |
 | Node | `>=24.15.0` (`26.8.2` for local development and the main CI job) | `package.json` `engines.node`, `.node-version` |
-| pnpm | `12.4.1` | `package.json` `packageManager`, `pnpm-workspace.yaml` |
+| pnpm | `12.4.2` | `package.json` `packageManager`, `pnpm-workspace.yaml` |
 
 The bin entry refuses to run on an older runtime with `NODE_VERSION_UNSUPPORTED`
 instead of failing later with a syntax error.

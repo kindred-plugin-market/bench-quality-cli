@@ -102,6 +102,7 @@ export async function applyPlan(plan, { stateDir, backupDir, generator, logger =
       files: plan.files,
       packageJson: { managed: plan.packageJson.managed },
       workspace: { managedKeys: plan.workspace?.managedKeys ?? {} },
+      prettierIgnore: { managedLines: plan.prettierIgnore?.managedLines ?? [] },
       lefthook: { managedEntries: plan.lefthook.managedEntries },
       git: { hooksPath: plan.git.hooksPath, previousHooksPath: plan.git.previousHooksPath ?? null },
       batch: { id: plan.batchId, startedAt, finishedAt: new Date().toISOString() },

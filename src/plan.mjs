@@ -11,11 +11,19 @@ import { BASE_WIRING, HOOK_SUPPORT_FILES, planHooks } from "./hooks.mjs";
 import { planLefthook } from "./lefthook.mjs";
 import { readManifest } from "./manifest.mjs";
 import { devDepsFor, planPackageJson, readManagedState, scriptsFor } from "./package-json.mjs";
+import { PRETTIER_IGNORE_FILE, planPrettierIgnore } from "./prettier-ignore.mjs";
 import { missingRequirements } from "./profiles/index.mjs";
 import { PACKAGE_ROOT, filesForFeatures, readTemplate } from "./templates.mjs";
 import { WORKSPACE_FILE, planWorkspaceYaml } from "./workspace-yaml.mjs";
 
 export const HOOKS_PATH_VALUE = ".husky";
+
+/**
+ * 逐字节比对的托管文件（生成器拥有内容）：vendored 模板与 hook 体。
+ * 其余 kind（lefthook / package-json / workspace / prettier-ignore）是**语义合并**，
+ * 消费者可以在其中自由书写 —— doctor 与 update 必须用同一套语义判定（C11）。
+ */
+const WHOLE_FILE_KINDS = new Set(["template", "hook"]);
 
 export async function generatorInfo() {
   const pkg = await readJsonIfExists(join(PACKAGE_ROOT, "package.json"));
@@ -45,7 +53,9 @@ export function assertInsideTarget(target, relPath) {
       hint: "Refusing to write; this is a generator bug, please report it.",
     });
   }
-  return { root, full, rel: relative(root, full) };
+  // 仓库相对路径一律用 POSIX 分隔符：它既是 manifest 的键、也是 plan/doctor 的输出，
+  // 若在 Windows 上变成 `scripts\quality\x.mjs`，同一份 manifest 会在平台间来回改写。
+  return { root, full, rel: relative(root, full).split(sep).join("/") };
 }
 
 /** Fail closed when a managed path (or one of its parents) is a symlink. */
@@ -185,6 +195,7 @@ export async function buildPlan({
   const notes = [];
   const conflicts = [];
   const writes = [];
+  let prettierManaged = existing?.prettierIgnore?.managedLines ?? [];
 
   const keepWiring = resolved.length > 0;
 
@@ -291,6 +302,32 @@ export async function buildPlan({
     });
   }
 
+  // 3c) .prettierignore — 声明「生成文件由生成器拥有，消费者格式器不得触碰」（C11）。
+  //     不这么做的话，消费者 `prettier --write .` 会把 vendored 脚本重排，doctor 报
+  //     drift、update 报 conflict，运维人员无法区分真改动与格式噪声。
+  if (keepWiring) {
+    const managedPaths = [
+      ...dedupeByTarget([...HOOK_SUPPORT_FILES, ...filesForFeatures(resolved)]).map((file) => file.to),
+      ...planHooks().map((hook) => hook.relPath),
+      "lefthook.yml",
+      WORKSPACE_FILE,
+    ];
+    const prettierPlan = planPrettierIgnore({
+      raw: await readTextIfExists(join(target, PRETTIER_IGNORE_FILE)),
+      managedPaths,
+      previousLines: existing?.prettierIgnore?.managedLines ?? [],
+    });
+    writes.push({
+      relPath: PRETTIER_IGNORE_FILE,
+      content: prettierPlan.content,
+      mode: 0o644,
+      kind: "prettier-ignore",
+      plannedHash: sha256(prettierPlan.content),
+      action: prettierPlan.existed ? (prettierPlan.changed ? "update" : "unchanged") : "create",
+    });
+    prettierManaged = prettierPlan.managedLines;
+  }
+
   // 4) retire files we used to manage but no longer do (feature removed, or a
   //    template a newer generator version stopped shipping). A file is retired
   //    only while its content is still exactly what we last wrote; anything
@@ -359,6 +396,7 @@ export async function buildPlan({
       changed: packagePlan.changed,
     },
     workspace: { managedKeys: workspacePlan.managed },
+    prettierIgnore: { managedLines: prettierManaged },
     git: {
       hooksPath: nextHooksPath,
       previousHooksPath,
@@ -367,6 +405,28 @@ export async function buildPlan({
     },
     files,
     previousManifest: existing,
+  };
+}
+
+/**
+ * 把一份 update 计划翻译成「托管状态判定」，供 doctor 与 update 共用同一套语义
+ * （C11）。核心区分：
+ *   - 逐字节托管文件（template/hook）：只有 conflict（消费者改过）才算 drift；
+ *     磁盘仍等于我们的输出但模板已更新 → behindTemplate（可安全刷新，不是 drift）。
+ *   - 语义合并文件（lefthook/package-json/workspace/prettier-ignore）：消费者可以在
+ *     其中自由书写，永远不产生 drift；需要刷新托管条目时只报 mergeRefresh。
+ */
+export function classifyPlan(plan) {
+  const paths = (predicate) => plan.writes.filter(predicate).map((write) => write.relPath);
+  const wholeFile = (write) => WHOLE_FILE_KINDS.has(write.kind);
+  return {
+    localEdits: plan.conflicts.map((conflict) => conflict.relPath),
+    behindTemplate: paths((write) => wholeFile(write) && write.action === "update"),
+    missing: paths((write) => wholeFile(write) && write.action === "create"),
+    mergeRefresh: paths(
+      (write) => !wholeFile(write) && (write.action === "update" || write.action === "create"),
+    ),
+    consistent: paths((write) => write.action === "unchanged"),
   };
 }
 

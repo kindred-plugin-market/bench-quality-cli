@@ -370,11 +370,15 @@ async function doctor(args) {
       : null;
   if (manifest) {
     try {
+      // 用 manifest 记录的 profile 复算，否则 profile 管理的 devDependencies /
+      // workspace 键会被当成「需要刷新」的差异（doctor 的误报来源）。
       const auditPlan = await buildPlan({
         target,
         mode: "update",
         registry,
         featureIds: manifest.features ?? [],
+        profile: findProfile(manifest.profile ?? DEFAULT_PROFILE) ?? null,
+        profiles: manifest.profiles ?? [],
         hooksPath,
       });
       managed = classifyPlan(auditPlan);

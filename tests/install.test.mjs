@@ -18,7 +18,7 @@ const readJson = async (name) => JSON.parse(await readFile(join(ROOT, name), "ut
 test("package.json pins the package manager and the runtime contract", async () => {
   const pkg = await readJson("package.json");
   assert.match(pkg.packageManager ?? "", /^pnpm@\d+\.\d+\.\d+$/, "packageManager must pin an exact pnpm version");
-  assert.equal(pkg.packageManager, "pnpm@12.4.1");
+  assert.equal(pkg.packageManager, "pnpm@12.4.2");
   assert.equal(pkg.engines.node, ">=24.15.0");
 });
 

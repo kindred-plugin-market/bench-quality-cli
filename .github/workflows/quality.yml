@@ -98,6 +98,8 @@ jobs:
         run: pnpm run check:syntax
       # The hook suite needs a POSIX shell and is verified on macOS; everything
       # else must pass on Windows too (path handling, git plumbing, yaml).
+      # tests/workflow-quality.test.mjs 断言这份清单与 tests/ 实际文件一致：
+      # 新增用例要么列在这里，要么在 macosOnly 表里说明原因（fail-closed）。
       - name: Tests (without the POSIX hook suite)
         run: >-
           node --test
@@ -107,3 +109,4 @@ jobs:
           tests/profiles.test.mjs
           tests/hooks-wiring.test.mjs
           tests/install.test.mjs
+          tests/platform-portability.test.mjs

@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { join } from "node:path";
 
 import { BIN, gitStatus, makeRepo, runCli } from "./helpers/cli-fixture.mjs";
+import { toPosixPath } from "./helpers/text.mjs";
 import { sha256 } from "../src/fsx.mjs";
 import { backupDirFor, readJournal, resolveStateDir, writeJournal } from "../src/state.mjs";
 
@@ -419,5 +420,6 @@ test("bin exposes the version without a target", () => {
   const result = runCli(["--version"], { cwd: process.cwd() });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+/);
-  assert.ok(BIN.endsWith("bin/index.mjs"));
+  // 路径末段断言：Windows 上是 `...\bin\index.mjs`（C10）。
+  assert.ok(toPosixPath(BIN).endsWith("bin/index.mjs"), `unexpected bin path: ${BIN}`);
 });

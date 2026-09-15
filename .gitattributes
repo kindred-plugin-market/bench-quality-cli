@@ -1,0 +1,10 @@
+# 仓库内文本统一按 LF 检出（C10）。
+#
+# 理由：quality 工作流同时跑 macOS 与 Windows。Windows runner 的 git 默认
+# core.autocrlf=true，会把 *.yaml / *.mjs 落成 CRLF，于是「同一份被验证过的
+# 代码」在两平台得到不同字节形态：文本断言、golden 比较、以及任何按字节读取
+# 仓库文件的检查都会出现平台特异红灯（run 34922413857 实测 4 failed）。
+#
+# 注意范围：这里只约束本仓库自己的检出形态；消费者仓库（init/update 写入的
+# 文件）由各自的 .gitattributes 决定，生成器不代其做主。
+* text=auto eol=lf

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 import {
@@ -85,16 +85,20 @@ test("bin entry runs on the current runtime", () => {
 });
 
 test("bin entry refuses an unsupported runtime end to end", () => {
+  // --import 的值是 ESM loader 的 URL，不是文件路径：Windows 的
+  // `D:\a\...` 会被当成 scheme `d:` 而报 ERR_UNSUPPORTED_ESM_URL_SCHEME（C10）。
+  const preload = pathToFileURL(join(ROOT, "tests/fixtures/pretend-node-version.mjs")).href;
+  assert.match(preload, /^file:\/\//, "--import must receive a file URL on every platform");
   const result = spawnSync(
     process.execPath,
-    ["--import", join(ROOT, "tests/fixtures/pretend-node-version.mjs"), join(ROOT, "bin/index.mjs"), "list"],
+    ["--import", preload, join(ROOT, "bin/index.mjs"), "list"],
     {
       encoding: "utf8",
       cwd: ROOT,
       env: { ...process.env, BENCH_TEST_PRETEND_NODE: "20.11.1" },
     },
   );
-  assert.equal(result.status, 1);
+  assert.equal(result.status, 1, result.stderr);
   assert.match(result.stderr, /NODE_VERSION_UNSUPPORTED: require >=24\.15\.0; got 20\.11\.1/);
   assert.equal(result.stdout, "", "nothing may run before the gate");
 });

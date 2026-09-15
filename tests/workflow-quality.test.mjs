@@ -5,7 +5,7 @@
 // runtime, no write path, and no silent divergence from package.json.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { load as loadYaml } from "js-yaml";
 
@@ -94,4 +94,24 @@ test("macOS runs the full suite and Windows the portable subset", async () => {
   assert.match(windowsRuns, /node --test/);
   assert.doesNotMatch(windowsRuns, /hooks\.test\.mjs/, "the POSIX hook suite stays off Windows (documented)");
   assert.match(windowsRuns, /transaction\.test\.mjs/);
+  assert.match(windowsRuns, /platform-portability\.test\.mjs/, "Windows must run the cross-platform regression suite");
+});
+
+test("every test file is either on the Windows list or explicitly macOS-only", async () => {
+  const { doc } = await readWorkflow();
+  const windowsRuns = doc.jobs.windows.steps.map((step) => step.run ?? "").join("\n");
+
+  // 说明为什么某个文件可以不进 Windows 清单——新增用例必须二选一，防止
+  // 「写了 Windows 回归用例但没接进 CI」这种假绿（C10）。
+  const macosOnly = new Map([
+    ["hooks.test.mjs", "needs a POSIX shell; the generated hook bodies are verified on macOS"],
+    ["pack.test.mjs", "the shipped tarball layout is verified on the release platform"],
+    ["workflow-quality.test.mjs", "static YAML invariants, already covered by the macOS full-suite run"],
+  ]);
+
+  const files = (await readdir(join(ROOT, "tests")))
+    .filter((name) => name.endsWith(".test.mjs"))
+    .sort();
+  const missing = files.filter((name) => !macosOnly.has(name) && !windowsRuns.includes(name));
+  assert.deepEqual(missing, [], `the Windows job must run: ${missing.join(", ")}`);
 });

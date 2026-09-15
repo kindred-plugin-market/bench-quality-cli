@@ -10,6 +10,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadAll as loadAllYaml } from "js-yaml";
 
+import { normalizeEol } from "./helpers/text.mjs";
+
 const ROOT = join(import.meta.dirname, "..");
 const readJson = async (name) => JSON.parse(await readFile(join(ROOT, name), "utf8"));
 
@@ -21,13 +23,14 @@ test("package.json pins the package manager and the runtime contract", async () 
 });
 
 test("pnpm-workspace.yaml keeps lefthook's postinstall denied", async () => {
-  const workspace = await readFile(join(ROOT, "pnpm-workspace.yaml"), "utf8");
+  // Windows checkout 是 CRLF；断言的是配置项而不是换行字节（C10）。
+  const workspace = normalizeEol(await readFile(join(ROOT, "pnpm-workspace.yaml"), "utf8"));
   assert.match(workspace, /allowBuilds:\n  lefthook: false/);
 });
 
 test("the lockfile matches the manifest specifiers", async () => {
   const pkg = await readJson("package.json");
-  const rawLock = await readFile(join(ROOT, "pnpm-lock.yaml"), "utf8");
+  const rawLock = normalizeEol(await readFile(join(ROOT, "pnpm-lock.yaml"), "utf8"));
   assert.match(rawLock, /^lockfileVersion: '9\.0'$/m, "pnpm 12 keeps lockfileVersion 9 — no lock migration needed");
 
   // pnpm 12 writes the lockfile as two YAML documents (package-manager metadata

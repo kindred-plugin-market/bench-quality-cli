@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { CODES } from "../src/errors.mjs";
 import { parseLefthookConfig, planLefthook, stripManagedEntries } from "../src/lefthook.mjs";
 import { makeRepo, runCli } from "./helpers/cli-fixture.mjs";
+import { normalizeEol } from "./helpers/text.mjs";
 
 const CONSTRUCTS = [
   { name: "true/false", yaml: "a: [true, false]\n", v4: { a: [true, false] }, agrees: true },
@@ -81,8 +82,10 @@ test("dump output is byte-identical to the recorded js-yaml 4.3.2 output", async
   };
   const { dump } = await import("js-yaml");
   const actual = dump(doc, { lineWidth: -1, noRefs: true, quoteStyle: "double" });
-  const expected = await readFile(join(import.meta.dirname, "fixtures/lefthook-dump-v4.yaml"), "utf8");
-  assert.equal(actual, expected, "dump output must not drift from 4.3.2");
+  // dump 永远输出 LF；golden 文件在 Windows checkout 上是 CRLF，先归一换行再比
+  // 内容（C10）。js-yaml 的 quoteStyle/缩进等字节差异仍会被这条断言抓住。
+  const expected = normalizeEol(await readFile(join(import.meta.dirname, "fixtures/lefthook-dump-v4.yaml"), "utf8"));
+  assert.equal(normalizeEol(actual), expected, "dump output must not drift from 4.3.2");
 });
 
 test("managed entries are replaced while consumer entries keep their values", () => {

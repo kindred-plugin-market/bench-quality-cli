@@ -71,10 +71,13 @@ test("the pnpm version in the workflow matches package.json", async () => {
   const { doc } = await readWorkflow();
   assert.equal(doc.env.PNPM_VERSION, pinned);
   for (const [name, job] of Object.entries(doc.jobs)) {
-    const setup = job.steps.find((step) => String(step.uses ?? "").startsWith("pnpm/action-setup@"));
-    assert.ok(setup, `job ${name} must install pnpm through the pinned action`);
-    assert.equal(setup.with.version, pinned, `job ${name} must install the pinned pnpm version`);
+    const install = job.steps.find((step) => (step.run ?? "").includes("npm install -g pnpm@"));
+    assert.ok(install, `job ${name} must install pnpm via npm (pnpm/action-setup 的 Windows 自安装器会切坏 shim)`);
+    assert.match(install.run, new RegExp(`pnpm@${pinned}`), `job ${name} must install the pinned pnpm version`);
   }
+  const { raw } = await readWorkflow();
+  const uses = [...raw.matchAll(/^\s*-?\s*uses:\s*(\S+)/gm)].map((m) => m[1]);
+  assert.ok(!uses.some((u) => u.startsWith("pnpm/action-setup")), "the action must not come back (Windows shim breakage)");
 });
 
 test("macOS runs the full suite and Windows the portable subset", async () => {

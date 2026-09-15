@@ -29,9 +29,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-        with:
-          version: 12.4.1
+      # pnpm/action-setup 的 Windows 自安装器在 v11→v12 切换后会留下指向旧布局的
+      # shim（pnpm 不可见），改为 npm 全局安装，三平台一致且少一个第三方 action。
+      - name: Install pnpm
+        run: npm install -g pnpm@12.4.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
@@ -57,9 +58,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-        with:
-          version: 12.4.1
+      # pnpm/action-setup 的 Windows 自安装器在 v11→v12 切换后会留下指向旧布局的
+      # shim（pnpm 不可见），改为 npm 全局安装，三平台一致且少一个第三方 action。
+      - name: Install pnpm
+        run: npm install -g pnpm@12.4.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Minimum supported runtime: the contract this repository promises.
@@ -82,9 +84,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-        with:
-          version: 12.4.1
+      # pnpm/action-setup 的 Windows 自安装器在 v11→v12 切换后会留下指向旧布局的
+      # shim（pnpm 不可见），改为 npm 全局安装，三平台一致且少一个第三方 action。
+      - name: Install pnpm
+        run: npm install -g pnpm@12.4.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version

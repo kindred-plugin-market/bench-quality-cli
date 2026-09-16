@@ -18,16 +18,25 @@ const forbiddenPlatformPatterns = [
 
 export function findForbiddenCiPlatforms(file, content) {
   const violations = []
-  let inBrowserOnlyLinuxJob = false
-  for (const [index, line] of content.split("\n").entries()) {
+  const lines = content.split("\n")
+  const allowed = new Set()
+  let inside = false
+  for (const [index, line] of lines.entries()) {
     if (/^ {2}e2e-critical:\s*$/.test(line)) {
-      inBrowserOnlyLinuxJob = true
+      inside = true
+      allowed.add(index)
+      for (let cursor = index - 1; cursor >= 0 && /^\s*#/.test(lines[cursor]); cursor--) {
+        allowed.add(cursor)
+      }
       continue
     }
-    if (/^ {2}\S/.test(line) && !/^ {2}e2e-critical:\s*$/.test(line)) {
-      inBrowserOnlyLinuxJob = false
+    if (inside) {
+      if (/^ {2}\S/.test(line)) inside = false
+      else allowed.add(index)
     }
-    if (inBrowserOnlyLinuxJob) continue
+  }
+  for (const [index, line] of lines.entries()) {
+    if (allowed.has(index)) continue
     for (const rule of forbiddenPlatformPatterns) {
       if (rule.pattern.test(line)) {
         violations.push({ file, line: index + 1, label: rule.label, source: line.trim() })

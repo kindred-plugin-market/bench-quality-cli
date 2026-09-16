@@ -5,6 +5,7 @@ import { findForbiddenCiPlatforms } from "../templates/guards/check-ci-platforms
 
 test("allows the scoped Ubuntu browser job used by critical E2E", () => {
   const content = `jobs:
+  # Chromium dependencies are isolated to this job.
   e2e-critical:
     runs-on: ubuntu-latest
     name: Linux Chromium E2E

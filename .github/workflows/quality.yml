@@ -110,4 +110,5 @@ jobs:
           tests/hooks-wiring.test.mjs
           tests/install.test.mjs
           tests/platform-portability.test.mjs
+          tests/ci-platforms.test.mjs
           tests/managed-ownership.test.mjs

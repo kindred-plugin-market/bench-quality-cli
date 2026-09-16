@@ -18,6 +18,39 @@ already-initialized project**.
 The bin entry refuses to run on an older runtime with `NODE_VERSION_UNSUPPORTED`
 instead of failing later with a syntax error.
 
+## Installation source (verified)
+
+`bench-quality-cli` is **not published to npm** (`npm view bench-quality-cli`
+returns 404). Do not use `npx bench-quality-cli` — that name is unclaimed.
+Install only from a verified source:
+
+```bash
+# 1. Clone this repository (SSH) and run from the checkout
+git clone git@github.com:kindred-plugin-market/bench-quality-cli.git
+node bench-quality-cli/bin/index.mjs init --profile node-tool
+
+# 2. Or pin a commit: download the GitHub tarball and verify its SHA-256
+#    against the digest published in the repository's release notes
+#    (see "Releases" — every release lists the tarball SHA-256).
+curl -fsSL https://github.com/kindred-plugin-market/bench-quality-cli/archive/<full-commit-sha>.tar.gz -o bqc.tar.gz
+shasum -a 256 bqc.tar.gz   # compare with the release-notes digest
+tar -xzf bqc.tar.gz
+node bench-quality-cli-<full-commit-sha>/bin/index.mjs init --profile node-tool
+```
+
+Rules that keep this verifiable:
+
+| Rule | Reason |
+| ---- | ------ |
+| Never `npx bench-quality-cli` until a real npm package exists | the name is unclaimed; anything could be published there |
+| Pin a **full commit SHA** (or a tag whose notes carry the tarball digest) | mutable branch refs cannot be audited later |
+| Prefer the pinned-tarball route for CI and cross-repo automation | no git history needed, digest-checkable |
+| npm publishing stays blocked until trusted publishing + provenance is set up | avoids leaking publish credentials during the current hardening batch |
+
+Consumers record the generator version + file hashes in `.bench-quality.json`,
+so an installed project can always tell which generator state it was vendored
+from (`doctor` flags any drift).
+
 ## Usage
 
 ```bash

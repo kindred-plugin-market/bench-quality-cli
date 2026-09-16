@@ -1,7 +1,7 @@
 {
   "name": "bench-quality-cli",
   "version": "0.1.1",
-  "description": "Vendor opt-in Bench quality gates (commitlint / lefthook hooks / guards) into any repo via `npx bench-quality-cli init`. Delete-safe: generated artifacts live in the consumer repo, not here.",
+  "description": "Vendor opt-in Bench quality gates (commitlint / lefthook hooks / guards) into any repo from a verified source checkout or pinned GitHub tarball. Delete-safe: generated artifacts live in the consumer repo, not here.",
   "type": "module",
   "bin": {
     "bench-quality": "bin/index.mjs"

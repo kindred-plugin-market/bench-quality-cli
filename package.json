@@ -33,9 +33,9 @@
     "url": "git+https://github.com/kindred-plugin-market/bench-quality-cli.git"
   },
   "devDependencies": {
-    "lefthook": "^2.1.14",
-    "@commitlint/cli": "^21.2.2",
-    "@commitlint/config-conventional": "^21.2.2",
+    "lefthook": "^2.1.16",
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
     "markdown-link-check": "^3"
   }
 }

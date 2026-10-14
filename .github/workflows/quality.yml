@@ -33,7 +33,7 @@ jobs:
       # shim（pnpm 不可见），改为 npm 全局安装，三平台一致且少一个第三方 action。
       - name: Install pnpm
         run: npm install -g pnpm@12.4.2
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -62,7 +62,7 @@ jobs:
       # shim（pnpm 不可见），改为 npm 全局安装，三平台一致且少一个第三方 action。
       - name: Install pnpm
         run: npm install -g pnpm@12.4.2
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Minimum supported runtime: the contract this repository promises.
           node-version: 24.15.0
@@ -88,7 +88,7 @@ jobs:
       # shim（pnpm 不可见），改为 npm 全局安装，三平台一致且少一个第三方 action。
       - name: Install pnpm
         run: npm install -g pnpm@12.4.2
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           cache: pnpm

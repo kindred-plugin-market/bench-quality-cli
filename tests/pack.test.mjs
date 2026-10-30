@@ -8,7 +8,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = join(import.meta.dirname, "..");
 
@@ -44,7 +45,7 @@ test("packing ships every runtime file and no test file", async (t) => {
   for (const file of sources) {
     const raw = await readFile(join(ROOT, file), "utf8");
     for (const match of raw.matchAll(/from\s+"(\.[^"]+)"/g)) {
-      const resolved = new URL(match[1], `file://${join(ROOT, file)}`).pathname.replace(`${ROOT}/`, "");
+      const resolved = relative(ROOT, fileURLToPath(new URL(match[1], pathToFileURL(join(ROOT, file)))));
       assert.ok(shippedSet.has(resolved), `${file} imports ${resolved}, which is not shipped`);
     }
   }

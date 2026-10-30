@@ -17,7 +17,7 @@ const ROOTS = ["bin", "src", "templates", "scripts", "tests"];
 const files = [];
 function walk(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (SKIP_DIRS.has(entry.name)) continue;
+    if (entry.name.startsWith("._") || SKIP_DIRS.has(entry.name)) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full);
     else if (/\.m?js$/.test(entry.name)) files.push(full);

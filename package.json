@@ -15,7 +15,7 @@
     "templates"
   ],
   "scripts": {
-    "test": "node --test \"tests/**/*.test.mjs\"",
+    "test": "node --test tests/*.test.mjs",
     "hooks:install": "node scripts/quality/install-hooks.mjs",
     "check:precommit": "node node_modules/lefthook/bin/index.js run pre-commit",
     "check:md-links": "node scripts/quality/check-markdown-links.mjs --all",

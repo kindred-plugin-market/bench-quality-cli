@@ -110,7 +110,7 @@ test("every test file is either on the Windows list or explicitly macOS-only", a
   ]);
 
   const files = (await readdir(join(ROOT, "tests")))
-    .filter((name) => name.endsWith(".test.mjs"))
+    .filter((name) => !name.startsWith("._") && name.endsWith(".test.mjs"))
     .sort();
   const missing = files.filter((name) => !macosOnly.has(name) && !windowsRuns.includes(name));
   assert.deepEqual(missing, [], `the Windows job must run: ${missing.join(", ")}`);
